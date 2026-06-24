@@ -1,0 +1,83 @@
+import { format } from "date-fns";
+import { normalizeState } from "./storage";
+
+export const BACKUP_VERSION = 1;
+
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export function createBackupPayload(state) {
+  const data = normalizeState(state);
+
+  return {
+    easyscale: true,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data,
+  };
+}
+
+export function backupFilename(date = new Date()) {
+  return `easyscale-backup-${format(date, "yyyy-MM-dd")}.json`;
+}
+
+export function downloadBackup(state) {
+  const payload = createBackupPayload(state);
+  downloadJson(backupFilename(), payload);
+  return payload;
+}
+
+function extractBackupData(parsed) {
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Arquivo inválido.");
+  }
+
+  if (parsed.easyscale === true && parsed.data) {
+    if (typeof parsed.version === "number" && parsed.version > BACKUP_VERSION) {
+      throw new Error("Este backup foi criado em uma versão mais recente do EasyScale.");
+    }
+    return normalizeState(parsed.data);
+  }
+
+  if (Array.isArray(parsed.people) || Array.isArray(parsed.rules) || parsed.shiftTimes) {
+    return normalizeState(parsed);
+  }
+
+  throw new Error("Arquivo não reconhecido como backup do EasyScale.");
+}
+
+export async function readBackupFile(file) {
+  if (!file) {
+    throw new Error("Nenhum arquivo selecionado.");
+  }
+
+  const text = await file.text();
+  let parsed;
+
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("O arquivo não é um JSON válido.");
+  }
+
+  return extractBackupData(parsed);
+}
+
+export function describeBackupContents(state) {
+  const data = normalizeState(state);
+
+  return {
+    people: data.people.length,
+    rules: data.rules.length,
+    hasShiftTimes: Boolean(data.shiftTimes),
+  };
+}

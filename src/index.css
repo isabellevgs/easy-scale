@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+
+  /* Surfaces */
+  --color-base: #0c0d10;
+  --color-surface: #15171c;
+  --color-surface-2: #1c1f26;
+  --color-surface-3: #242832;
+  --color-border: #2a2e38;
+  --color-border-soft: #1f222a;
+
+  /* Text */
+  --color-ink: #edeef0;
+  --color-ink-soft: #9a9ea8;
+  --color-ink-faint: #5e636e;
+
+  /* Brand */
+  --color-brand: #f5a623;
+  --color-brand-soft: #f5a62322;
+
+  /* Shift colors */
+  --color-shift-morning: #f5b942;
+  --color-shift-morning-soft: #f5b94220;
+  --color-shift-afternoon: #ec7c4f;
+  --color-shift-afternoon-soft: #ec7c4f20;
+  --color-shift-night: #6c7ee8;
+  --color-shift-night-soft: #6c7ee820;
+  --color-shift-weekend-morning: #42c9a8;
+  --color-shift-weekend-morning-soft: #42c9a820;
+  --color-shift-weekend-night: #c084fc;
+  --color-shift-weekend-night-soft: #c084fc20;
+
+  --color-good: #4caf7d;
+  --color-bad: #e2615c;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* For export-to-image/pdf: force a clean printable surface */
+.export-capture {
+  background: var(--color-base);
+}
+
+.export-capture-header,
+.export-capture-footer {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
