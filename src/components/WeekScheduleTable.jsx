@@ -87,16 +87,12 @@ function ShiftRowLabel({ shift, compact = false }) {
   );
 }
 
-function CellButton({ onClick, children, className = "", centered = false, flow = false }) {
-  const layoutClass = flow
-    ? "relative flex h-full w-full min-h-[52px]"
-    : "absolute inset-0 flex w-full";
-
+function CellButton({ onClick, children, className = "", centered = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`${layoutClass} bg-transparent transition-[filter] hover:brightness-110 ${
+      className={`absolute inset-0 flex w-full bg-transparent transition-[filter] hover:brightness-110 ${
         centered
           ? "items-center justify-center"
           : "flex-col items-stretch text-left"
@@ -190,15 +186,25 @@ function PeopleList({ scheduled, people }) {
 function PeopleCell({ dayOccurrences, shift, people, onClick, personFilterIds }) {
   const shiftOccs = dayOccurrences.filter((o) => o.shift === shift.id);
   const scheduled = filterPeopleByIds(peopleScheduledIn(shiftOccs, people), personFilterIds);
+  const isEmpty = scheduled.length === 0;
 
   return (
-    <CellButton onClick={onClick} flow centered={scheduled.length === 0}>
-      {scheduled.length === 0 ? (
-        <span className="text-[11px] text-ink-faint">Sem escala</span>
-      ) : (
-        <PeopleList scheduled={scheduled} people={people} />
+    <div className="relative h-full min-h-[52px] w-full">
+      {!isEmpty && (
+        <div className="pointer-events-none">
+          <PeopleList scheduled={scheduled} people={people} />
+        </div>
       )}
-    </CellButton>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`absolute inset-0 z-10 flex w-full bg-transparent transition-[filter] hover:brightness-110 ${
+          isEmpty ? "items-center justify-center" : "flex-col items-stretch text-left"
+        }`}
+      >
+        {isEmpty ? <span className="text-[11px] text-ink-faint">Sem escala</span> : null}
+      </button>
+    </div>
   );
 }
 
@@ -405,7 +411,7 @@ export default function WeekScheduleTable({
                     return (
                       <td
                         key={cell.iso}
-                        className={`border-l border-border-soft bg-surface-2/30 p-0 align-top ${
+                        className={`h-px border-l border-border-soft bg-surface-2/30 p-0 align-top ${
                           isNeedsView ? "relative min-h-[48px]" : ""
                         }`}
                       >
@@ -413,7 +419,7 @@ export default function WeekScheduleTable({
                           className={
                             isNeedsView
                               ? "absolute inset-0 flex items-center justify-center"
-                              : "flex min-h-[52px] items-center justify-center"
+                              : "flex h-full min-h-[52px] items-center justify-center"
                           }
                         >
                           <span className="text-[12px] text-ink-faint/50">—</span>
@@ -425,7 +431,7 @@ export default function WeekScheduleTable({
                   return (
                     <td
                       key={cell.iso}
-                      className={`border-l border-border-soft p-0 align-top ${
+                      className={`h-px border-l border-border-soft p-0 align-top ${
                         isNeedsView ? "relative min-h-[48px]" : ""
                       }`}
                       style={cell.cellVisual ?? undefined}
