@@ -175,7 +175,7 @@ export async function applyPersonShiftRecurrence(
           personId,
           shifts: [shiftId],
           recurrence: { type: "weekly", weekdays: weekdays?.length ? weekdays : [weekday] },
-          startDate: dateISO,
+          startDate: "",
           endDate: endDate || "",
         };
 
@@ -199,7 +199,7 @@ export async function applyPersonShiftRecurrence(
     personId,
     shifts: [shiftId],
     recurrence: { type: "weekly", weekdays: dayList },
-    startDate: dateISO,
+    startDate: "",
     endDate: endDate || "",
   });
 }

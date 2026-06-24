@@ -171,8 +171,9 @@ function PeopleList({ scheduled, people }) {
         return (
           <span
             key={person.id}
-            className="block w-full truncate rounded-md px-2 py-1 text-left text-[12px] font-semibold leading-snug"
+            className="block w-full break-words rounded-md px-2 py-1 text-left text-[12px] font-semibold leading-snug"
             style={{ backgroundColor: color, color: chipTextColor(color) }}
+            title={person.nome}
           >
             {person.nome}
           </span>
@@ -306,6 +307,7 @@ export default function WeekScheduleTable({
   const staffingOccByDate = fullOccByDate ?? occByDate;
   const displayDays = DISPLAY_DAY_ORDER.map((index) => days[index]);
   const isNeedsView = viewMode === SCHEDULE_VIEW.NEEDS;
+  const isPeopleView = viewMode === SCHEDULE_VIEW.PEOPLE;
 
   const tableWrapClass = isNeedsView
     ? "week-schedule-table-wrap hidden sm:block"
@@ -419,7 +421,7 @@ export default function WeekScheduleTable({
                       className={`relative border-l border-border-soft p-0 align-top ${
                         isNeedsView ? "min-h-[48px]" : "min-h-[52px]"
                       }`}
-                      style={cell.cellVisual ?? undefined}
+                      style={isPeopleView ? undefined : cell.cellVisual ?? undefined}
                     >
                       {viewMode === SCHEDULE_VIEW.PEOPLE ? (
                         <PeopleCell

@@ -16,13 +16,11 @@ import ScheduleViewToggle from "../components/ScheduleViewToggle";
 import StaffingLegend from "../components/StaffingLegend";
 import ShiftStaffingCard from "../components/ShiftStaffingCard";
 import ShiftStaffingPeopleModal from "../components/ShiftStaffingPeopleModal";
-import { getOccurrences, toISODate, groupByDate, filterOccurrencesByPerson, formatShiftDateLabel } from "../lib/schedule";
+import { getOccurrences, toISODate, groupByDate, formatShiftDateLabel } from "../lib/schedule";
 import { WEEKDAY_LABELS, MONTH_LABELS, colorForPerson, peopleScheduledIn } from "../lib/constants";
 import { getDayStaffingRows } from "../lib/shiftNeeds";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
-import { usePersonFilter } from "../hooks/usePersonFilter";
 import { useShifts } from "../hooks/useShifts";
-import PersonFilterSelect from "../components/PersonFilterSelect";
 import PageContainer from "../components/PageContainer";
 
 export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
@@ -31,7 +29,6 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayModalView, setDayModalView] = useState(SCHEDULE_VIEW.PEOPLE);
   const [staffingModal, setStaffingModal] = useState(null);
-  const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const exportRef = useRef(null);
   const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
 
@@ -62,11 +59,7 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
     () => getOccurrences(rules, rangeStart, rangeEnd, holidays),
     [rules, rangeStart, rangeEnd, holidays]
   );
-  const filteredOccurrences = useMemo(
-    () => filterOccurrencesByPerson(occurrences, personFilterIds),
-    [occurrences, personFilterIds]
-  );
-  const occByDate = useMemo(() => groupByDate(filteredOccurrences), [filteredOccurrences]);
+  const occByDate = useMemo(() => groupByDate(occurrences), [occurrences]);
 
   const todayISO = toISODate(new Date());
   const monthLabel = `${MONTH_LABELS[baseMonth.getMonth()]} de ${baseMonth.getFullYear()}`;
@@ -136,14 +129,6 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
           innerRef={exportRef}
           title={monthLabel}
           subtitle="Escala mensal · Necessidade"
-          headerExtra={
-            <PersonFilterSelect
-              className="export-skip"
-              people={people}
-              value={personFilterIds}
-              onChange={setPersonFilterIds}
-            />
-          }
         >
           <Card className="overflow-hidden p-2 sm:p-3">
             <div className="grid grid-cols-7 gap-1 px-1 pb-2 pt-1">

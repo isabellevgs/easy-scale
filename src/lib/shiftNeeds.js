@@ -4,6 +4,9 @@ import { getShiftIds, normalizeShifts } from "./shifts";
 export const FERIADO_DAY_INDEX = 7;
 export const NEED_DAY_COUNT = 8;
 
+/** Ordem de exibição na tabela de necessidade: seg–sáb–dom–feriado. */
+export const NEED_DAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0, FERIADO_DAY_INDEX];
+
 export const WEEKEND_DAYS = new Set([0, 6]);
 
 function isWeekdayRow(dayIndex) {

@@ -50,9 +50,16 @@ function expandRuleDates(rule, rangeStartISO, rangeEndISO, holidays = []) {
   const rangeStart = fromISODate(rangeStartISO);
   const rangeEnd = fromISODate(rangeEndISO);
 
-  const cursorStart = rule.startDate
-    ? (isAfter(fromISODate(rule.startDate), rangeStart) ? fromISODate(rule.startDate) : rangeStart)
-    : rangeStart;
+  // Regras semanais respeitam os dias da recorrência em todo o intervalo consultado;
+  // startDate não limita ocorrências (só endDate encerra a regra).
+  const cursorStart =
+    rec.type === "weekly"
+      ? rangeStart
+      : rule.startDate
+        ? isAfter(fromISODate(rule.startDate), rangeStart)
+          ? fromISODate(rule.startDate)
+          : rangeStart
+        : rangeStart;
   const cursorEnd = rule.endDate
     ? (isBefore(fromISODate(rule.endDate), rangeEnd) ? fromISODate(rule.endDate) : rangeEnd)
     : rangeEnd;

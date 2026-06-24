@@ -23,6 +23,7 @@ import {
   isShiftNeedEditable,
   shiftNeedDisabledReason,
   FERIADO_DAY_INDEX,
+  NEED_DAY_DISPLAY_ORDER,
 } from "../lib/shiftNeeds";
 import { WEEKDAY_LABELS_FULL } from "../lib/constants";
 import { describeBackupContents, readBackupFile } from "../lib/backup";
@@ -209,10 +210,10 @@ export default function SettingsPage({
     return { upcoming, past };
   }, [holidays]);
 
-  const needDayRows = [
-    ...WEEKDAY_LABELS_FULL.map((label, dayIndex) => ({ label, dayIndex })),
-    { label: "Feriado", dayIndex: FERIADO_DAY_INDEX },
-  ];
+  const needDayRows = NEED_DAY_DISPLAY_ORDER.map((dayIndex) => ({
+    label: dayIndex === FERIADO_DAY_INDEX ? "Feriado" : WEEKDAY_LABELS_FULL[dayIndex],
+    dayIndex,
+  }));
 
   const deleteUsageCount = deleteTarget ? countRulesUsingShift(rules, deleteTarget.id) : 0;
 

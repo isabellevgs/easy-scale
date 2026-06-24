@@ -4,12 +4,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarRange, CalendarDays, Users, ArrowRight } from "lucide-react";
 import { Card, PersonAvatar } from "../components/ui";
-import { getOccurrences, toISODate, filterOccurrencesByPerson } from "../lib/schedule";
+import { getOccurrences, toISODate } from "../lib/schedule";
 import { colorForPerson, MONTH_LABELS, peopleScheduledIn } from "../lib/constants";
 import { getApplicableShiftIdsForDate } from "../lib/shiftNeeds";
-import { usePersonFilter } from "../hooks/usePersonFilter";
 import { useShifts } from "../hooks/useShifts";
-import PersonFilterSelect from "../components/PersonFilterSelect";
 import PageContainer from "../components/PageContainer";
 
 function greeting() {
@@ -21,17 +19,13 @@ function greeting() {
 
 export default function HomePage({ people, rules, holidays = [] }) {
   const { shifts, shiftsById } = useShifts();
-  const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const today = useMemo(() => new Date(), []);
   const todayISO = toISODate(today);
   const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
 
   const todayOccurrences = useMemo(
-    () => filterOccurrencesByPerson(
-      getOccurrences(rules, todayISO, todayISO, holidays),
-      personFilterIds
-    ),
-    [rules, todayISO, holidays, personFilterIds]
+    () => getOccurrences(rules, todayISO, todayISO, holidays),
+    [rules, todayISO, holidays]
   );
 
   const todayShifts = useMemo(() => {
@@ -70,16 +64,7 @@ export default function HomePage({ people, rules, holidays = [] }) {
       <Card className="mt-6 overflow-hidden">
         <div className="px-6 py-6">
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-[16px] font-semibold text-ink">Quem trabalha hoje</h2>
-              {people.length > 0 && (
-                <PersonFilterSelect
-                  people={people}
-                  value={personFilterIds}
-                  onChange={setPersonFilterIds}
-                />
-              )}
-            </div>
+            <h2 className="text-[16px] font-semibold text-ink">Quem trabalha hoje</h2>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-[13px]">
                 <thead>

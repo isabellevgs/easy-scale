@@ -232,6 +232,11 @@ export function useAppData() {
     async (file) => {
       try {
         const nextState = await readBackupFile(file);
+        try {
+          localStorage.removeItem("easyscale:personFilter");
+        } catch {
+          // ignore
+        }
         const savePromise = waitForSave();
         setState(nextState);
         const result = await savePromise;
