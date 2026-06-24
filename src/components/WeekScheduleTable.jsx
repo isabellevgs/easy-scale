@@ -87,12 +87,16 @@ function ShiftRowLabel({ shift, compact = false }) {
   );
 }
 
-function CellButton({ onClick, children, className = "", centered = false }) {
+function CellButton({ onClick, children, className = "", centered = false, flow = false }) {
+  const layoutClass = flow
+    ? "relative flex h-full w-full min-h-[52px]"
+    : "absolute inset-0 flex w-full";
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`absolute inset-0 flex w-full bg-transparent transition-[filter] hover:brightness-110 ${
+      className={`${layoutClass} bg-transparent transition-[filter] hover:brightness-110 ${
         centered
           ? "items-center justify-center"
           : "flex-col items-stretch text-left"
@@ -188,11 +192,9 @@ function PeopleCell({ dayOccurrences, shift, people, onClick, personFilterIds })
   const scheduled = filterPeopleByIds(peopleScheduledIn(shiftOccs, people), personFilterIds);
 
   return (
-    <CellButton onClick={onClick}>
+    <CellButton onClick={onClick} flow centered={scheduled.length === 0}>
       {scheduled.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-2.5 py-3">
-          <span className="text-[11px] text-ink-faint">Sem escala</span>
-        </div>
+        <span className="text-[11px] text-ink-faint">Sem escala</span>
       ) : (
         <PeopleList scheduled={scheduled} people={people} />
       )}
@@ -307,7 +309,6 @@ export default function WeekScheduleTable({
   const staffingOccByDate = fullOccByDate ?? occByDate;
   const displayDays = DISPLAY_DAY_ORDER.map((index) => days[index]);
   const isNeedsView = viewMode === SCHEDULE_VIEW.NEEDS;
-  const isPeopleView = viewMode === SCHEDULE_VIEW.PEOPLE;
 
   const tableWrapClass = isNeedsView
     ? "week-schedule-table-wrap hidden sm:block"
@@ -404,11 +405,17 @@ export default function WeekScheduleTable({
                     return (
                       <td
                         key={cell.iso}
-                        className={`relative border-l border-border-soft bg-surface-2/30 p-0 align-top ${
-                          isNeedsView ? "min-h-[48px]" : "min-h-[52px]"
+                        className={`border-l border-border-soft bg-surface-2/30 p-0 align-top ${
+                          isNeedsView ? "relative min-h-[48px]" : ""
                         }`}
                       >
-                        <div className="absolute inset-0 flex items-center justify-center">
+                        <div
+                          className={
+                            isNeedsView
+                              ? "absolute inset-0 flex items-center justify-center"
+                              : "flex min-h-[52px] items-center justify-center"
+                          }
+                        >
                           <span className="text-[12px] text-ink-faint/50">—</span>
                         </div>
                       </td>
@@ -418,10 +425,10 @@ export default function WeekScheduleTable({
                   return (
                     <td
                       key={cell.iso}
-                      className={`relative border-l border-border-soft p-0 align-top ${
-                        isNeedsView ? "min-h-[48px]" : "min-h-[52px]"
+                      className={`border-l border-border-soft p-0 align-top ${
+                        isNeedsView ? "relative min-h-[48px]" : ""
                       }`}
-                      style={isPeopleView ? undefined : cell.cellVisual ?? undefined}
+                      style={cell.cellVisual ?? undefined}
                     >
                       {viewMode === SCHEDULE_VIEW.PEOPLE ? (
                         <PeopleCell
