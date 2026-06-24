@@ -37,7 +37,7 @@ export default function WeekPage({
   const exportRef = useRef(null);
 
   const weekStart = useMemo(() => {
-    const base = startOfWeek(new Date(), { weekStartsOn: 0 });
+    const base = startOfWeek(new Date(), { weekStartsOn: 1 });
     return addDays(base, weekOffset * 7);
   }, [weekOffset]);
 

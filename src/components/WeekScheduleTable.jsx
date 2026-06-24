@@ -18,9 +18,6 @@ import {
 } from "../lib/shiftNeeds";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
 
-/** Segunda a domingo (índice 1–6, 0 do array days onde days[0]=domingo). */
-const DISPLAY_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-
 function cellStatusForRow(row) {
   return row.required > 0 ? row.status : STAFFING_STATUS.NONE;
 }
@@ -313,7 +310,7 @@ export default function WeekScheduleTable({
   onOpenStaffing,
 }) {
   const staffingOccByDate = fullOccByDate ?? occByDate;
-  const displayDays = DISPLAY_DAY_ORDER.map((index) => days[index]);
+  const displayDays = days;
   const isNeedsView = viewMode === SCHEDULE_VIEW.NEEDS;
 
   const tableWrapClass = isNeedsView
