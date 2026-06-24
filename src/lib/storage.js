@@ -1,6 +1,8 @@
 import { normalizeShifts, DEFAULT_SHIFTS } from "./shifts";
 import { normalizeShiftNeedsForShifts, normalizeHolidays } from "./shiftNeeds";
 import { sortPeopleByName, isValidPersonColor, normalizeHexColor, PEOPLE_PALETTE } from "./constants";
+import { normalizeConsistencyRules, resolveConsistencyRules } from "./consistencyRules";
+import { getShiftIds } from "./shifts";
 
 const STORAGE_KEY = "easyscale:v1";
 
@@ -10,6 +12,7 @@ export const DEFAULT_STATE = {
   shifts: DEFAULT_SHIFTS,
   shiftNeeds: normalizeShiftNeedsForShifts(null, DEFAULT_SHIFTS),
   holidays: [],
+  consistencyRules: [],
 };
 
 function normalizePerson(raw) {
@@ -42,6 +45,7 @@ export function normalizeState(parsed) {
   }
 
   const shifts = normalizeShifts(parsed.shifts, parsed.shiftTimes);
+  const shiftIds = getShiftIds(shifts);
   const people = Array.isArray(parsed.people)
     ? ensurePersonColor(sortPeopleByName(parsed.people.map(normalizePerson).filter(Boolean)))
     : [];
@@ -52,6 +56,7 @@ export function normalizeState(parsed) {
     shifts,
     shiftNeeds: normalizeShiftNeedsForShifts(parsed.shiftNeeds, shifts),
     holidays: normalizeHolidays(parsed.holidays),
+    consistencyRules: resolveConsistencyRules(parsed, shiftIds),
   };
 }
 

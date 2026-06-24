@@ -13,6 +13,11 @@ import {
   pruneShiftNeeds,
 } from "../lib/shiftNeeds";
 import { downloadBackup, readBackupFile } from "../lib/backup";
+import {
+  normalizeConsistencyRules,
+  pruneConsistencyRulesForShifts,
+  removePersonFromConsistencyRules,
+} from "../lib/consistencyRules";
 
 function normalizeShiftItem(raw) {
   const [item] = normalizeShifts([raw]);
@@ -86,6 +91,7 @@ export function useAppData() {
         ...s,
         people: s.people.filter((p) => p.id !== id),
         rules: s.rules.filter((r) => r.personId !== id),
+        consistencyRules: removePersonFromConsistencyRules(s.consistencyRules, id),
       }));
     },
     [runAndSave]
@@ -169,6 +175,7 @@ export function useAppData() {
             normalizeShiftNeedsForShifts(s.shiftNeeds, shifts),
             shiftIds
           ),
+          consistencyRules: pruneConsistencyRulesForShifts(s.consistencyRules, shiftIds),
         };
       });
     },
@@ -224,6 +231,16 @@ export function useAppData() {
     [runAndSave]
   );
 
+  const updateConsistencyRules = useCallback(
+    (consistencyRules) => {
+      return runAndSave((s) => ({
+        ...s,
+        consistencyRules: normalizeConsistencyRules(consistencyRules, getShiftIds(s.shifts)),
+      }));
+    },
+    [runAndSave]
+  );
+
   const exportBackup = useCallback(() => {
     downloadBackup(state);
   }, [state]);
@@ -258,6 +275,7 @@ export function useAppData() {
     shifts: state.shifts,
     shiftNeeds: state.shiftNeeds,
     holidays: state.holidays,
+    consistencyRules: state.consistencyRules,
     addPerson,
     updatePerson,
     removePerson,
@@ -275,5 +293,6 @@ export function useAppData() {
     removeHoliday,
     exportBackup,
     importBackup,
+    updateConsistencyRules,
   };
 }

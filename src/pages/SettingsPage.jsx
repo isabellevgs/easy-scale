@@ -27,6 +27,7 @@ import {
 } from "../lib/shiftNeeds";
 import { WEEKDAY_LABELS_FULL } from "../lib/constants";
 import { describeBackupContents, readBackupFile } from "../lib/backup";
+import BackupContentsSummary from "../components/BackupContentsSummary";
 import { toISODate } from "../lib/schedule";
 import PageContainer from "../components/PageContainer";
 
@@ -36,6 +37,7 @@ export default function SettingsPage({
   shifts: shiftsConfig,
   shiftNeeds,
   holidays,
+  consistencyRules,
   addShift,
   updateShift,
   removeShift,
@@ -62,7 +64,13 @@ export default function SettingsPage({
   const [shiftModal, setShiftModal] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const summary = describeBackupContents({ people, rules, shifts: shiftsConfig });
+  const summary = describeBackupContents({
+    people,
+    rules,
+    shifts: shiftsConfig,
+    holidays,
+    consistencyRules,
+  });
 
   function handleNeedChange(dayIndex, shiftId, value) {
     if (!isShiftNeedEditable(dayIndex, shiftId, shiftsById)) return;
@@ -236,8 +244,8 @@ export default function SettingsPage({
           <div>
             <h2 className="text-[15px] font-semibold text-ink">Backup dos dados</h2>
             <p className="mt-0.5 text-[13px] text-ink-soft">
-              Exporte ou importe um arquivo JSON com equipe, escalas, turnos, feriados e necessidade
-              por turno.
+              Exporte ou importe um arquivo JSON com equipe, escalas, turnos, feriados, necessidade
+              por turno e regras de consistência.
             </p>
           </div>
         </div>
@@ -261,6 +269,17 @@ export default function SettingsPage({
                 ,{" "}
                 <span className="font-medium text-ink">
                   {holidays.length} feriado{holidays.length !== 1 ? "s" : ""}
+                </span>
+              </>
+            )}
+            {summary.consistencyRuleLinks > 0 && (
+              <>
+                ,{" "}
+                <span className="font-medium text-ink">
+                  {summary.consistencyRulesWithPeople} regra
+                  {summary.consistencyRulesWithPeople !== 1 ? "s" : ""} de consistência (
+                  {summary.consistencyRuleLinks} vínculo
+                  {summary.consistencyRuleLinks !== 1 ? "s" : ""})
                 </span>
               </>
             )}
@@ -532,23 +551,11 @@ export default function SettingsPage({
       >
         <p className="text-[14px] text-ink-soft">
           Isso substituirá todos os dados atuais neste dispositivo: equipe, escalas, turnos,
-          feriados e necessidade por turno.
+          feriados, necessidade por turno e regras de consistência.
         </p>
         {pendingPreview && (
-          <div className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-[13px] text-ink-soft">
-            Conteúdo do arquivo:{" "}
-            <span className="font-medium text-ink">
-              {pendingPreview.people} pessoa{pendingPreview.people !== 1 ? "s" : ""}
-            </span>
-            ,{" "}
-            <span className="font-medium text-ink">
-              {pendingPreview.rules} escala{pendingPreview.rules !== 1 ? "s" : ""}
-            </span>{" "}
-            e{" "}
-            <span className="font-medium text-ink">
-              {pendingPreview.shifts} turno{pendingPreview.shifts !== 1 ? "s" : ""}
-            </span>
-            .
+          <div className="mt-3">
+            <BackupContentsSummary summary={pendingPreview} />
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">

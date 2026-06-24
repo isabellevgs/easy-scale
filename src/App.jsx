@@ -19,7 +19,18 @@ export default function App() {
         <ShiftsProvider shifts={data.shifts}>
           <AppShell exportBackup={data.exportBackup} importBackup={data.importBackup}>
           <Routes>
-            <Route path="/" element={<HomePage people={data.people} rules={data.rules} holidays={data.holidays} />} />
+            <Route
+              path="/"
+              element={
+                <HomePage
+                  people={data.people}
+                  rules={data.rules}
+                  holidays={data.holidays}
+                  consistencyRules={data.consistencyRules}
+                  onSaveConsistencyRules={data.updateConsistencyRules}
+                />
+              }
+            />
             <Route
               path="/equipe"
               element={
@@ -53,6 +64,8 @@ export default function App() {
                   rules={data.rules}
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
+                  consistencyRules={data.consistencyRules}
+                  onSaveConsistencyRules={data.updateConsistencyRules}
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
@@ -67,6 +80,8 @@ export default function App() {
                   rules={data.rules}
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
+                  consistencyRules={data.consistencyRules}
+                  onSaveConsistencyRules={data.updateConsistencyRules}
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
@@ -82,6 +97,7 @@ export default function App() {
                   shifts={data.shifts}
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
+                  consistencyRules={data.consistencyRules}
                   addShift={data.addShift}
                   updateShift={data.updateShift}
                   removeShift={data.removeShift}

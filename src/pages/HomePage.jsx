@@ -4,6 +4,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarRange, CalendarDays, Users, ArrowRight } from "lucide-react";
 import { Card, PersonAvatar } from "../components/ui";
+import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
+import { formatMonthPeriodLabel } from "../lib/consistencyRules";
 import { getOccurrences, toISODate } from "../lib/schedule";
 import { colorForPerson, MONTH_LABELS, peopleScheduledIn } from "../lib/constants";
 import { getApplicableShiftIdsForDate } from "../lib/shiftNeeds";
@@ -17,11 +19,23 @@ function greeting() {
   return "Boa noite";
 }
 
-export default function HomePage({ people, rules, holidays = [] }) {
+export default function HomePage({
+  people,
+  rules,
+  holidays = [],
+  consistencyRules,
+  onSaveConsistencyRules,
+}) {
   const { shifts, shiftsById } = useShifts();
   const today = useMemo(() => new Date(), []);
   const todayISO = toISODate(today);
   const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
+
+  const monthKeys = useMemo(() => [format(today, "yyyy-MM")], [today]);
+  const inconsistencyPeriodLabel = useMemo(
+    () => formatMonthPeriodLabel(monthKeys[0]),
+    [monthKeys]
+  );
 
   const todayOccurrences = useMemo(
     () => getOccurrences(rules, todayISO, todayISO, holidays),
@@ -177,6 +191,17 @@ export default function HomePage({ people, rules, holidays = [] }) {
         <StatCard to="/semana" icon={CalendarRange} title="Escala semanal" value="Visão por dia da semana" />
         <StatCard to="/mes" icon={CalendarDays} title="Escala mensal" value="Calendário completo" />
       </div>
+
+      <ScheduleInconsistencies
+        people={people}
+        rules={rules}
+        holidays={holidays}
+        shiftsById={shiftsById}
+        consistencyRules={consistencyRules}
+        onSaveRules={onSaveConsistencyRules}
+        monthKeys={monthKeys}
+        periodLabel={inconsistencyPeriodLabel}
+      />
     </PageContainer>
   );
 }

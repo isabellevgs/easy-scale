@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { Button, Modal } from "./ui";
 import { describeBackupContents, readBackupFile } from "../lib/backup";
+import BackupContentsSummary from "../components/BackupContentsSummary";
 import { useToast } from "./Toast";
 
 function SidebarActionButton({ collapsed, label, icon: Icon, onClick }) {
@@ -95,24 +96,12 @@ export default function SidebarBackupActions({ collapsed, exportBackup, importBa
 
       <Modal open={!!pendingFile} onClose={closeImportModal} title="Importar backup">
         <p className="text-[14px] text-ink-soft">
-          Isso substituirá todos os dados atuais neste dispositivo: equipe, escalas, turnos, feriados
-          e necessidade por turno.
+          Isso substituirá todos os dados atuais neste dispositivo: equipe, escalas, turnos,
+          feriados, necessidade por turno e regras de consistência.
         </p>
         {pendingPreview && (
-          <div className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-[13px] text-ink-soft">
-            Conteúdo do arquivo:{" "}
-            <span className="font-medium text-ink">
-              {pendingPreview.people} pessoa{pendingPreview.people !== 1 ? "s" : ""}
-            </span>
-            ,{" "}
-            <span className="font-medium text-ink">
-              {pendingPreview.rules} escala{pendingPreview.rules !== 1 ? "s" : ""}
-            </span>{" "}
-            e{" "}
-            <span className="font-medium text-ink">
-              {pendingPreview.shifts} turno{pendingPreview.shifts !== 1 ? "s" : ""}
-            </span>
-            .
+          <div className="mt-3">
+            <BackupContentsSummary summary={pendingPreview} />
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">

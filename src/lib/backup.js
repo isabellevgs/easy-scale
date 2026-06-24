@@ -1,5 +1,11 @@
 import { format } from "date-fns";
+import { buildShiftsById } from "./shifts";
 import { normalizeState } from "./storage";
+import {
+  buildConsistencyRulesForBackup,
+  countConsistencyRuleLinks,
+  countConsistencyRulesWithPeople,
+} from "./consistencyRules";
 
 export const BACKUP_VERSION = 1;
 
@@ -15,8 +21,18 @@ function downloadJson(filename, payload) {
   URL.revokeObjectURL(url);
 }
 
-export function createBackupPayload(state) {
+export function buildBackupData(state) {
   const data = normalizeState(state);
+  const shiftsById = buildShiftsById(data.shifts);
+
+  return {
+    ...data,
+    consistencyRules: buildConsistencyRulesForBackup(data.people, data.consistencyRules, shiftsById),
+  };
+}
+
+export function createBackupPayload(state) {
+  const data = buildBackupData(state);
 
   return {
     easyscale: true,
@@ -79,5 +95,8 @@ export function describeBackupContents(state) {
     people: data.people.length,
     rules: data.rules.length,
     shifts: data.shifts.length,
+    holidays: data.holidays.length,
+    consistencyRulesWithPeople: countConsistencyRulesWithPeople(data.consistencyRules),
+    consistencyRuleLinks: countConsistencyRuleLinks(data.consistencyRules),
   };
 }

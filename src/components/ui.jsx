@@ -85,7 +85,16 @@ export function Card({ className = "", children, ...props }) {
   );
 }
 
-export function Modal({ open, onClose, title, children, footer, width = "max-w-md" }) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  width = "max-w-md",
+  contentClassName = "",
+  footerClassName = "",
+}) {
   if (!open) return null;
   return (
     <div
@@ -109,9 +118,13 @@ export function Modal({ open, onClose, title, children, footer, width = "max-w-m
               ✕
             </button>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${contentClassName}`}>
+            {children}
+          </div>
           {footer ? (
-            <div className="mt-4 shrink-0 border-t border-border-soft pt-4">{footer}</div>
+            <div className={`mt-4 shrink-0 border-t border-border-soft pt-4 ${footerClassName}`}>
+              {footer}
+            </div>
           ) : null}
         </div>
       </div>

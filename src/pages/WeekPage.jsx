@@ -14,9 +14,21 @@ import { SCHEDULE_VIEW, useScheduleViewMode } from "../hooks/useScheduleViewMode
 import { usePersonFilter } from "../hooks/usePersonFilter";
 import { useShifts } from "../hooks/useShifts";
 import PersonFilterSelect from "../components/PersonFilterSelect";
+import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
+import { formatMonthPeriodLabels } from "../lib/consistencyRules";
 import PageContainer from "../components/PageContainer";
 
-export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
+export default function WeekPage({
+  people,
+  rules,
+  shiftNeeds,
+  holidays,
+  consistencyRules,
+  onSaveConsistencyRules,
+  addRule,
+  updateRule,
+  removeRule,
+}) {
   const { shifts, shiftsById } = useShifts();
   const [weekOffset, setWeekOffset] = useState(0);
   const [viewMode, setViewMode] = useScheduleViewMode();
@@ -57,6 +69,14 @@ export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule,
   const rangeLabel = rangeLabelRaw.replace(/(^|– )([a-z])/g, (m, sep, c) => sep + c.toUpperCase());
   const exportSubtitle =
     viewMode === SCHEDULE_VIEW.NEEDS ? "Escala semanal · Necessidade" : "Escala semanal";
+  const monthKeys = useMemo(
+    () => [...new Set(days.map((day) => format(day, "yyyy-MM")))],
+    [days]
+  );
+  const inconsistencyPeriodLabel = useMemo(
+    () => formatMonthPeriodLabels(monthKeys),
+    [monthKeys]
+  );
 
   function openStaffingModal(day, row) {
     const shift = shifts.find((item) => item.id === row.shiftId);
@@ -155,6 +175,19 @@ export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule,
         updateRule={updateRule}
         removeRule={removeRule}
       />
+
+      {people.length > 0 && (
+        <ScheduleInconsistencies
+          people={people}
+          rules={rules}
+          holidays={holidays}
+          shiftsById={shiftsById}
+          consistencyRules={consistencyRules}
+          onSaveRules={onSaveConsistencyRules}
+          monthKeys={monthKeys}
+          periodLabel={inconsistencyPeriodLabel}
+        />
+      )}
     </PageContainer>
   );
 }

@@ -16,6 +16,8 @@ import ScheduleViewToggle from "../components/ScheduleViewToggle";
 import StaffingLegend from "../components/StaffingLegend";
 import ShiftStaffingCard from "../components/ShiftStaffingCard";
 import ShiftStaffingPeopleModal from "../components/ShiftStaffingPeopleModal";
+import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
+import { formatMonthPeriodLabel } from "../lib/consistencyRules";
 import { getOccurrences, toISODate, groupByDate, formatShiftDateLabel } from "../lib/schedule";
 import { WEEKDAY_LABELS, MONTH_LABELS, colorForPerson, peopleScheduledIn } from "../lib/constants";
 import { getDayStaffingRows } from "../lib/shiftNeeds";
@@ -23,7 +25,17 @@ import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
 import { useShifts } from "../hooks/useShifts";
 import PageContainer from "../components/PageContainer";
 
-export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
+export default function MonthPage({
+  people,
+  rules,
+  shiftNeeds,
+  holidays,
+  consistencyRules,
+  onSaveConsistencyRules,
+  addRule,
+  updateRule,
+  removeRule,
+}) {
   const { shifts, shiftsById } = useShifts();
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -63,6 +75,11 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
 
   const todayISO = toISODate(new Date());
   const monthLabel = `${MONTH_LABELS[baseMonth.getMonth()]} de ${baseMonth.getFullYear()}`;
+  const monthKeys = useMemo(() => [format(baseMonth, "yyyy-MM")], [baseMonth]);
+  const inconsistencyPeriodLabel = useMemo(
+    () => formatMonthPeriodLabel(monthKeys[0]),
+    [monthKeys]
+  );
 
   const selectedOccurrences = selectedDay ? occByDate[selectedDay] || [] : [];
   const selectedStaffingRows = selectedDay
@@ -279,6 +296,19 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
         updateRule={updateRule}
         removeRule={removeRule}
       />
+
+      {people.length > 0 && (
+        <ScheduleInconsistencies
+          people={people}
+          rules={rules}
+          holidays={holidays}
+          shiftsById={shiftsById}
+          consistencyRules={consistencyRules}
+          onSaveRules={onSaveConsistencyRules}
+          monthKeys={monthKeys}
+          periodLabel={inconsistencyPeriodLabel}
+        />
+      )}
     </PageContainer>
   );
 }
