@@ -7,6 +7,14 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { WEEKDAY_LABELS_FULL } from "./constants";
+import { normalizeScaleType, SCALE_TYPES } from "./rules";
+import {
+  describeCustomRecurrence,
+  expandCustomRuleDates,
+  getLastCustomOccurrenceDate,
+} from "./customRecurrence";
+
+export { SCALE_TYPES, normalizeScaleType } from "./rules";
 
 // ---- Helpers de data (strings ISO 'yyyy-MM-dd' são a fonte da verdade) ----
 
@@ -45,6 +53,19 @@ function expandRuleDates(rule, rangeStartISO, rangeEndISO, holidays = []) {
       dates.push(rec.date);
     }
     return dates;
+  }
+
+  if (rec.type === "specific_dates") {
+    for (const date of (rec.dates || []).slice().sort()) {
+      if (date && inRange(date, rangeStartISO, rangeEndISO)) {
+        dates.push(date);
+      }
+    }
+    return dates;
+  }
+
+  if (rec.type === "custom") {
+    return expandCustomRuleDates(rule, rangeStartISO, rangeEndISO);
   }
 
   const rangeStart = fromISODate(rangeStartISO);
@@ -95,14 +116,19 @@ function expandRuleDates(rule, rangeStartISO, rangeEndISO, holidays = []) {
   return dates;
 }
 
+export function isRegularOccurrence(occ) {
+  return normalizeScaleType(occ?.scaleType) === SCALE_TYPES.REGULAR;
+}
+
 /**
- * Gera ocorrências { personId, date, shift, ruleId } para todas as regras,
+ * Gera ocorrências { personId, date, shift, ruleId, scaleType } para todas as regras,
  * dentro do intervalo informado.
  */
 export function getOccurrences(rules, rangeStartISO, rangeEndISO, holidays = []) {
   const normalizedHolidays = Array.isArray(holidays) ? holidays : [];
   const occurrences = [];
   for (const rule of rules) {
+    const scaleType = normalizeScaleType(rule.scaleType);
     const dates = expandRuleDates(rule, rangeStartISO, rangeEndISO, normalizedHolidays);
     for (const date of dates) {
       for (const shift of rule.shifts) {
@@ -112,11 +138,17 @@ export function getOccurrences(rules, rangeStartISO, rangeEndISO, holidays = [])
           personId: rule.personId,
           date,
           shift,
+          scaleType,
         });
       }
     }
   }
   return occurrences;
+}
+
+/** Ocorrências regulares — usadas nas regras de inconsistência. */
+export function getRegularOccurrences(rules, rangeStartISO, rangeEndISO, holidays = []) {
+  return getOccurrences(rules, rangeStartISO, rangeEndISO, holidays).filter(isRegularOccurrence);
 }
 
 /** Mantém ocorrências das pessoas informadas (array vazio = sem filtro). */
@@ -151,6 +183,20 @@ export function describeRecurrence(rule, weekdayLabels, monthLabels) {
   if (rec.type === "specific_date") {
     return `Dia único · ${format(fromISODate(rec.date), "dd/MM/yyyy")}`;
   }
+  if (rec.type === "specific_dates") {
+    const dates = (rec.dates || []).slice().sort();
+    if (dates.length === 0) return "Selecionar dias · —";
+    if (dates.length === 1) {
+      return `Selecionar dias · ${format(fromISODate(dates[0]), "dd/MM/yyyy")}`;
+    }
+    if (dates.length <= 3) {
+      const labels = dates.map((d) => format(fromISODate(d), "dd/MM/yyyy")).join(", ");
+      return `Selecionar dias · ${labels}`;
+    }
+    const first = format(fromISODate(dates[0]), "dd/MM/yyyy");
+    const last = format(fromISODate(dates[dates.length - 1]), "dd/MM/yyyy");
+    return `Selecionar dias · ${dates.length} dias (${first} – ${last})`;
+  }
   if (rec.type === "weekly") {
     const days = (rec.weekdays || [])
       .slice()
@@ -158,6 +204,9 @@ export function describeRecurrence(rule, weekdayLabels, monthLabels) {
       .map((w) => weekdayLabels[w])
       .join(", ");
     return `Semanal · ${days || "—"}`;
+  }
+  if (rec.type === "custom") {
+    return `Personalizada · ${describeCustomRecurrence(rec, rule.startDate, weekdayLabels)}`;
   }
   if (rec.type === "monthly") {
     return `Mensal · todo dia ${rec.dayOfMonth}`;
@@ -183,6 +232,24 @@ export function isRuleExpired(rule, todayISO = toISODate(new Date())) {
     return Boolean(rec.date && rec.date < todayISO);
   }
 
+  if (rec.type === "specific_dates") {
+    const dates = rec.dates || [];
+    if (dates.length === 0) return true;
+    return dates.every((d) => d < todayISO);
+  }
+
+  if (rec.type === "custom") {
+    const normalized = rec;
+    if (normalized.endType === "on_date" && normalized.endDate) {
+      return normalized.endDate < todayISO;
+    }
+    if (normalized.endType === "after_count") {
+      const lastDate = getLastCustomOccurrenceDate(rule);
+      return Boolean(lastDate && lastDate < todayISO);
+    }
+    return false;
+  }
+
   if (rule.endDate) {
     return rule.endDate < todayISO;
   }
@@ -202,13 +269,20 @@ export function partitionRulesByStatus(rules, todayISO = toISODate(new Date())) 
     }
   }
 
-  expired.sort((a, b) => {
-    const dateA =
-      a.recurrence.type === "specific_date" ? a.recurrence.date : a.endDate || "0000-01-01";
-    const dateB =
-      b.recurrence.type === "specific_date" ? b.recurrence.date : b.endDate || "0000-01-01";
-    return dateB.localeCompare(dateA);
-  });
+  function ruleExpiredSortDate(rule) {
+    const rec = rule.recurrence;
+    if (rec.type === "specific_date") return rec.date || "0000-01-01";
+    if (rec.type === "specific_dates") {
+      const dates = rec.dates || [];
+      return dates.length ? [...dates].sort().pop() : "0000-01-01";
+    }
+    if (rec.type === "custom") {
+      return getLastCustomOccurrenceDate(rule) || rule.endDate || "0000-01-01";
+    }
+    return rule.endDate || "0000-01-01";
+  }
+
+  expired.sort((a, b) => ruleExpiredSortDate(b).localeCompare(ruleExpiredSortDate(a)));
 
   return { active, expired };
 }

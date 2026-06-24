@@ -1,5 +1,8 @@
 import { getOccurrences } from "./schedule";
 import { validatePersonCanJoinShiftOnDate, validateRuleSingleShiftPerDay } from "./scheduleValidation";
+import { normalizeScaleType } from "./rules";
+
+const RECURRING_TYPES = new Set(["weekly", "custom", "specific_dates"]);
 
 function getWeekday(dateISO) {
   return new Date(`${dateISO}T00:00:00`).getDay();
@@ -49,6 +52,7 @@ export function schedulePersonOnShiftDate({
   return addRule({
     personId,
     shifts: [shiftId],
+    scaleType: normalizeScaleType(),
     recurrence: { type: "specific_date", date: dateISO },
     startDate: "",
     endDate: "",
@@ -80,6 +84,20 @@ export async function unschedulePersonOnShiftDate({
       continue;
     }
 
+    if (rec.type === "specific_dates") {
+      const shifts = rule.shifts || [];
+      const onlyThisShift = shifts.length === 1 && shifts[0] === shiftId;
+      const nextDates = (rec.dates || []).filter((day) => day !== dateISO);
+
+      if (onlyThisShift) {
+        if (nextDates.length === 0) tasks.push(removeRule(rule.id));
+        else tasks.push(updateRule(rule.id, { recurrence: { ...rec, dates: nextDates } }));
+      } else if (shifts.includes(shiftId)) {
+        tasks.push(updateRule(rule.id, { shifts: shifts.filter((id) => id !== shiftId) }));
+      }
+      continue;
+    }
+
     if (rec.type === "weekly") {
       const weekdays = rec.weekdays || [];
       const shifts = rule.shifts || [];
@@ -105,7 +123,9 @@ export async function unschedulePersonOnShiftDate({
 export function getPersonShiftRuleOnDate(rules, { personId, shiftId, dateISO }, holidays = []) {
   const covering = getRulesCoveringShiftDate(rules, { personId, shiftId, dateISO }, holidays);
   return (
+    covering.find((rule) => rule.recurrence.type === "custom") ||
     covering.find((rule) => rule.recurrence.type === "weekly") ||
+    covering.find((rule) => rule.recurrence.type === "specific_dates") ||
     covering.find(
       (rule) => rule.recurrence.type === "specific_date" && rule.recurrence.date === dateISO
     ) ||
@@ -116,12 +136,17 @@ export function getPersonShiftRuleOnDate(rules, { personId, shiftId, dateISO }, 
 
 export function isPersonShiftRecurring(rules, params, holidays = []) {
   const rule = getPersonShiftRuleOnDate(rules, params, holidays);
-  return rule?.recurrence?.type === "weekly";
+  if (!rule) return false;
+  const type = rule.recurrence?.type;
+  if (type === "specific_dates") {
+    return (rule.recurrence.dates || []).length > 1;
+  }
+  return RECURRING_TYPES.has(type);
 }
 
 export async function applyPersonShiftRecurrence(
   { rules, addRule, updateRule, removeRule, holidays, shiftsById },
-  { personId, shiftId, dateISO, recurrenceType, weekdays, endDate }
+  { personId, shiftId, dateISO, rulePayload }
 ) {
   const covering = getRulesCoveringShiftDate(rules, { personId, shiftId, dateISO }, holidays);
   const weekday = getWeekday(dateISO);
@@ -133,6 +158,20 @@ export async function applyPersonShiftRecurrence(
     if (rec.type === "specific_date" && rec.date === dateISO) {
       if (rule.shifts.length <= 1) tasks.push(removeRule(rule.id));
       else tasks.push(updateRule(rule.id, { shifts: rule.shifts.filter((id) => id !== shiftId) }));
+      continue;
+    }
+
+    if (rec.type === "specific_dates") {
+      const shifts = rule.shifts || [];
+      const onlyThisShift = shifts.length === 1 && shifts[0] === shiftId;
+      const nextDates = (rec.dates || []).filter((day) => day !== dateISO);
+
+      if (onlyThisShift) {
+        if (nextDates.length === 0) tasks.push(removeRule(rule.id));
+        else tasks.push(updateRule(rule.id, { recurrence: { ...rec, dates: nextDates } }));
+      } else if (shifts.includes(shiftId)) {
+        tasks.push(updateRule(rule.id, { shifts: shifts.filter((id) => id !== shiftId) }));
+      }
       continue;
     }
 
@@ -162,46 +201,21 @@ export async function applyPersonShiftRecurrence(
     (rule) => !covering.some((cleared) => cleared.id === rule.id)
   );
 
-  const candidateRule =
-    recurrenceType === "specific_date"
-      ? {
-          personId,
-          shifts: [shiftId],
-          recurrence: { type: "specific_date", date: dateISO },
-          startDate: "",
-          endDate: "",
-        }
-      : {
-          personId,
-          shifts: [shiftId],
-          recurrence: { type: "weekly", weekdays: weekdays?.length ? weekdays : [weekday] },
-          startDate: "",
-          endDate: endDate || "",
-        };
+  const candidateRule = {
+    personId,
+    shifts: [shiftId],
+    scaleType: normalizeScaleType(rulePayload.scaleType),
+    recurrence: rulePayload.recurrence,
+    startDate: rulePayload.startDate || "",
+    endDate: rulePayload.endDate || "",
+  };
 
   const validation = validateRuleSingleShiftPerDay(remainingRules, candidateRule, holidays, {
     shiftsById,
   });
   if (!validation.ok) return validation;
 
-  if (recurrenceType === "specific_date") {
-    return addRule({
-      personId,
-      shifts: [shiftId],
-      recurrence: { type: "specific_date", date: dateISO },
-      startDate: "",
-      endDate: "",
-    });
-  }
-
-  const dayList = weekdays?.length ? weekdays : [weekday];
-  return addRule({
-    personId,
-    shifts: [shiftId],
-    recurrence: { type: "weekly", weekdays: dayList },
-    startDate: "",
-    endDate: endDate || "",
-  });
+  return addRule(candidateRule);
 }
 
 export async function togglePersonShiftOnDate(actions, params) {

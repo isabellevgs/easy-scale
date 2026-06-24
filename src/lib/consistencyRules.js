@@ -1,6 +1,6 @@
 import { addDays, format, parseISO, startOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { getOccurrences } from "./schedule";
+import { getRegularOccurrences } from "./schedule";
 
 export const CONSISTENCY_RULE_TYPES = {
   SHIFT_PER_MONTH: "shift_per_month",
@@ -419,7 +419,7 @@ function checkRuleForPerson(
 
   for (const week of weeks) {
     const weekLabel = formatWeekPeriodLabel(week.startISO, week.endISO);
-    const weekOccurrences = getOccurrences(
+    const weekOccurrences = getRegularOccurrences(
       scheduleRules,
       week.startISO,
       week.endISO,
@@ -467,7 +467,7 @@ export function detectInconsistencies({
 
   for (const monthKey of monthKeys) {
     const { start, end } = getMonthRange(monthKey);
-    const monthOccurrences = getOccurrences(scheduleRules, start, end, holidays);
+    const monthOccurrences = getRegularOccurrences(scheduleRules, start, end, holidays);
     const weeks = getWeeksOverlappingMonth(monthKey);
 
     for (const ruleDef of consistencyRules) {

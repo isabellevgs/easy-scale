@@ -1,4 +1,4 @@
-import { useToast } from "../components/Toast";
+import { useToast } from "./useToast";
 
 export function usePersist() {
   const toast = useToast();

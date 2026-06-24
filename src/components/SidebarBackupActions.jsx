@@ -3,7 +3,7 @@ import { Download, Upload } from "lucide-react";
 import { Button, Modal } from "./ui";
 import { describeBackupContents, readBackupFile } from "../lib/backup";
 import BackupContentsSummary from "../components/BackupContentsSummary";
-import { useToast } from "./Toast";
+import { useToast } from "../hooks/useToast";
 
 function SidebarActionButton({ collapsed, label, icon: Icon, onClick }) {
   return (

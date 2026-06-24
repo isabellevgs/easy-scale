@@ -18,11 +18,14 @@ import { colorForPerson } from "../lib/constants";
 import { sortShiftIds } from "../lib/shifts";
 import { validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
 import { usePersist } from "../hooks/usePersist";
+import { describeScaleType, SCALE_TYPES } from "../lib/rules";
 import PageContainer from "../components/PageContainer";
 
 const RECURRENCE_TYPES = [
   { id: "specific_date", label: "Dia específico" },
+  { id: "specific_dates", label: "Selecionar dias" },
   { id: "weekly", label: "Semanal" },
+  { id: "custom", label: "Personalizada" },
 ];
 
 const DEFAULT_FILTERS = {
@@ -106,9 +109,16 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
 
   function handleSave(ruleData) {
     const payload =
-      ruleData.recurrence?.type === "specific_date"
+      ruleData.recurrence?.type === "specific_date" ||
+      ruleData.recurrence?.type === "specific_dates"
         ? { ...ruleData, startDate: "", endDate: "" }
-        : ruleData;
+        : ruleData.recurrence?.type === "custom"
+          ? {
+              ...ruleData,
+              endDate:
+                ruleData.recurrence.endType === "on_date" ? ruleData.recurrence.endDate : "",
+            }
+          : ruleData;
 
     const validation = validateRuleSingleShiftPerDay(rules, payload, holidays, {
       excludeRuleId: editing?.id,
@@ -474,6 +484,11 @@ function RuleListItem({ rule, person, people, expired = false, onEdit, onDelete 
           <p className={`text-[14px] font-medium ${expired ? "text-ink-soft" : "text-ink"}`}>
             {person.nome}
           </p>
+          {rule.scaleType === SCALE_TYPES.OVERTIME && (
+            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+              Hora extra
+            </span>
+          )}
           {expired && (
             <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
               Passada
@@ -481,7 +496,7 @@ function RuleListItem({ rule, person, people, expired = false, onEdit, onDelete 
           )}
         </div>
         <p className="text-[12px] text-ink-faint">
-          {describeRecurrence(rule, WEEKDAY_LABELS_FULL, MONTH_LABELS)}
+          {describeScaleType(rule.scaleType)} · {describeRecurrence(rule, WEEKDAY_LABELS_FULL, MONTH_LABELS)}
         </p>
         <div className="mt-1.5 flex flex-wrap gap-1">
           {sortShiftIds(rule.shifts, shiftsConfig).map((s) => (

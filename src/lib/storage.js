@@ -1,7 +1,7 @@
 import { normalizeShifts, DEFAULT_SHIFTS } from "./shifts";
 import { normalizeShiftNeedsForShifts, normalizeHolidays } from "./shiftNeeds";
 import { sortPeopleByName, isValidPersonColor, normalizeHexColor, PEOPLE_PALETTE } from "./constants";
-import { normalizeConsistencyRules, resolveConsistencyRules } from "./consistencyRules";
+import { resolveConsistencyRules } from "./consistencyRules";
 import { getShiftIds } from "./shifts";
 
 const STORAGE_KEY = "easyscale:v1";

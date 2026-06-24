@@ -57,9 +57,12 @@ export default function ColorPicker({ value, onChange, error, fallbackColor = "#
     displayHex || hsvToHex(draftHsv.h, draftHsv.s, draftHsv.v) || fallbackColor;
   const hueColor = hsvToHex(draftHsv.h, 100, 100);
 
-  function emitDraft(hex) {
-    onChange(hex ?? "");
-  }
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const emitDraft = useCallback((hex) => {
+    onChangeRef.current(hex ?? "");
+  }, []);
 
   function updateDraft(nextHsv) {
     setDraftHsv(nextHsv);
@@ -68,28 +71,34 @@ export default function ColorPicker({ value, onChange, error, fallbackColor = "#
     emitDraft(hex);
   }
 
-  const handleSvMove = useCallback((event, rect) => {
-    const s = clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100);
-    const v = clamp((1 - (event.clientY - rect.top) / rect.height) * 100, 0, 100);
-    setDraftHsv((current) => {
-      const next = { ...current, s, v };
-      const hex = hsvToHex(next.h, next.s, next.v);
-      setDraftHex(hex);
-      emitDraft(hex);
-      return next;
-    });
-  }, []);
+  const handleSvMove = useCallback(
+    (event, rect) => {
+      const s = clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100);
+      const v = clamp((1 - (event.clientY - rect.top) / rect.height) * 100, 0, 100);
+      setDraftHsv((current) => {
+        const next = { ...current, s, v };
+        const hex = hsvToHex(next.h, next.s, next.v);
+        setDraftHex(hex);
+        emitDraft(hex);
+        return next;
+      });
+    },
+    [emitDraft]
+  );
 
-  const handleHueMove = useCallback((event, rect) => {
-    const h = clamp(((event.clientX - rect.left) / rect.width) * 360, 0, 360);
-    setDraftHsv((current) => {
-      const next = { ...current, h };
-      const hex = hsvToHex(next.h, next.s, next.v);
-      setDraftHex(hex);
-      emitDraft(hex);
-      return next;
-    });
-  }, []);
+  const handleHueMove = useCallback(
+    (event, rect) => {
+      const h = clamp(((event.clientX - rect.left) / rect.width) * 360, 0, 360);
+      setDraftHsv((current) => {
+        const next = { ...current, h };
+        const hex = hsvToHex(next.h, next.s, next.v);
+        setDraftHex(hex);
+        emitDraft(hex);
+        return next;
+      });
+    },
+    [emitDraft]
+  );
 
   const startSvDrag = useDrag(handleSvMove);
   const startHueDrag = useDrag(handleHueMove);

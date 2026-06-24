@@ -1,5 +1,7 @@
 import { addYears, format, parseISO } from "date-fns";
-import { getOccurrences, toISODate } from "./schedule";
+import { getOccurrences, isRegularOccurrence, toISODate } from "./schedule";
+import { normalizeScaleType, SCALE_TYPES } from "./rules";
+import { getLastCustomOccurrenceDate } from "./customRecurrence";
 
 function shiftLabel(shiftsById, shiftId) {
   return shiftsById?.[shiftId]?.label ?? "outro turno";
@@ -30,7 +32,10 @@ export function getPersonOtherShiftOnDate(
 
   const occurrences = getOccurrences(rules, dateISO, dateISO, holidays);
   return (
-    occurrences.find((occ) => occ.personId === personId && occ.shift !== shiftId)?.shift ?? null
+    occurrences.find(
+      (occ) =>
+        isRegularOccurrence(occ) && occ.personId === personId && occ.shift !== shiftId
+    )?.shift ?? null
   );
 }
 
@@ -59,6 +64,26 @@ function getRuleValidationRange(rule) {
 
   if (rec.type === "specific_date" && rec.date) {
     return { start: rec.date, end: rec.date };
+  }
+
+  if (rec.type === "specific_dates" && rec.dates?.length) {
+    const sorted = [...rec.dates].sort();
+    return { start: sorted[0], end: sorted[sorted.length - 1] };
+  }
+
+  if (rec.type === "custom") {
+    const start = rule.startDate || toISODate(new Date());
+    if (rec.endType === "on_date" && rec.endDate) {
+      return { start, end: rec.endDate };
+    }
+    if (rec.endType === "after_count") {
+      const lastDate = getLastCustomOccurrenceDate(rule);
+      return { start, end: lastDate || format(addYears(parseISO(start), 1), "yyyy-MM-dd") };
+    }
+    return {
+      start,
+      end: format(addYears(parseISO(start), 2), "yyyy-MM-dd"),
+    };
   }
 
   const start = rule.startDate || toISODate(new Date());
@@ -91,6 +116,10 @@ export function validateRuleSingleShiftPerDay(rules, candidateRule, holidays = [
     return { ok: true };
   }
 
+  if (normalizeScaleType(candidateRule.scaleType) === SCALE_TYPES.OVERTIME) {
+    return { ok: true };
+  }
+
   const testRules = buildRulesWithCandidate(rules, candidateRule, excludeRuleId);
   const { start, end } = getRuleValidationRange(candidateRule);
   const occurrences = getOccurrences(testRules, start, end, holidays);
@@ -98,6 +127,7 @@ export function validateRuleSingleShiftPerDay(rules, candidateRule, holidays = [
 
   for (const occ of occurrences) {
     if (!requiresSingleShiftPerPerson(occ.date, holidays)) continue;
+    if (!isRegularOccurrence(occ)) continue;
 
     const key = `${occ.date}|${occ.personId}`;
     if (!shiftsByDatePerson.has(key)) {

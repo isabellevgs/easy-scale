@@ -118,7 +118,9 @@ export function Modal({
               ✕
             </button>
           </div>
-          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${contentClassName}`}>
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pr-3 [scrollbar-gutter:stable] ${contentClassName}`}
+          >
             {children}
           </div>
           {footer ? (
