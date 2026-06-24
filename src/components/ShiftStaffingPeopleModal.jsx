@@ -73,8 +73,6 @@ export default function ShiftStaffingPeopleModal({
 
   function handleToggle(personId) {
     if (!dateISO || !shift) return;
-    const removing = scheduledIds.has(personId);
-    if (!removing && enforceSingleShift && otherShiftByPerson.has(personId)) return;
 
     persist(
       () =>
@@ -82,7 +80,7 @@ export default function ShiftStaffingPeopleModal({
           { rules, addRule, updateRule, removeRule, holidays, shiftsById },
           { personId, shiftId: shift.id, dateISO }
         ),
-      removing ? "Removido do turno." : "Adicionado ao turno.",
+      scheduledIds.has(personId) ? "Removido do turno." : "Adicionado ao turno.",
       "Não foi possível atualizar a escala."
     );
   }
@@ -104,7 +102,7 @@ export default function ShiftStaffingPeopleModal({
 
         <p className="mt-4 text-[13px] text-ink-soft">
           {enforceSingleShift
-            ? "Selecione quem trabalha neste turno. Em dias úteis (seg–sex), cada pessoa só pode ter um turno."
+            ? "Selecione quem trabalha neste turno. Em dias úteis (seg–sex), o aviso amarelo indica quem já está em outro turno."
             : "Selecione quem trabalha neste turno. Fins de semana e feriados permitem mais de um turno por pessoa."}
         </p>
 
@@ -120,9 +118,10 @@ export default function ShiftStaffingPeopleModal({
           <div className="mt-3 max-h-[min(420px,55vh)] space-y-1.5 overflow-y-auto pr-0.5">
             {sortPeopleByName(allPeople).map((person) => {
               const selected = scheduledIds.has(person.id);
-              const blockedShiftId = otherShiftByPerson.get(person.id);
-              const blocked = enforceSingleShift && !selected && Boolean(blockedShiftId);
-              const blockedLabel = blockedShiftId ? shiftsById[blockedShiftId]?.label : null;
+              const otherShiftId = otherShiftByPerson.get(person.id);
+              const otherShiftLabel = otherShiftId ? shiftsById[otherShiftId]?.label : null;
+              const showOtherShiftWarning =
+                enforceSingleShift && !selected && Boolean(otherShiftLabel);
               const personColor = colorForPerson(person.id, allPeople);
               const recurring =
                 selected &&
@@ -138,24 +137,16 @@ export default function ShiftStaffingPeopleModal({
                   className={`relative rounded-xl border transition-colors ${
                     selected
                       ? "border-brand/40 bg-brand-soft/25"
-                      : blocked
-                        ? "border-border-soft bg-surface/40 opacity-70"
-                        : "border-border-soft"
+                      : "border-border-soft"
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => handleToggle(person.id)}
-                    disabled={blocked}
                     className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                      selected
-                        ? "pr-11 hover:bg-brand-soft/35"
-                        : blocked
-                          ? "cursor-not-allowed"
-                          : "hover:bg-surface-2"
+                      selected ? "pr-11 hover:bg-brand-soft/35" : "hover:bg-surface-2"
                     }`}
                     aria-pressed={selected}
-                    title={blocked ? `Já escalado(a) no turno ${blockedLabel}` : undefined}
                   >
                     <span
                       className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
@@ -171,8 +162,10 @@ export default function ShiftStaffingPeopleModal({
                     >
                       {person.nome}
                     </span>
-                    {blocked && blockedLabel && (
-                      <span className="shrink-0 text-[11px] text-ink-faint">Em {blockedLabel}</span>
+                    {showOtherShiftWarning && (
+                      <span className="shrink-0 text-[11px] font-medium text-amber-500">
+                        Em {otherShiftLabel}
+                      </span>
                     )}
                   </button>
 

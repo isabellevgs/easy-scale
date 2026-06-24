@@ -1,5 +1,5 @@
 import { getOccurrences } from "./schedule";
-import { validatePersonCanJoinShiftOnDate, validateRuleSingleShiftPerDay } from "./scheduleValidation";
+import { validateRuleSingleShiftPerDay } from "./scheduleValidation";
 import { normalizeScaleType } from "./rules";
 
 const RECURRING_TYPES = new Set(["weekly", "custom", "specific_dates"]);
@@ -33,20 +33,10 @@ export function schedulePersonOnShiftDate({
   shiftId,
   dateISO,
   holidays,
-  shiftsById,
+  shiftsById: _shiftsById,
 }) {
   if (isPersonScheduledOnShiftDate(rules, { personId, shiftId, dateISO }, holidays)) {
     return Promise.resolve({ ok: true });
-  }
-
-  const validation = validatePersonCanJoinShiftOnDate(
-    rules,
-    { personId, shiftId, dateISO },
-    holidays,
-    shiftsById
-  );
-  if (!validation.ok) {
-    return Promise.resolve(validation);
   }
 
   return addRule({
