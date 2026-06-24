@@ -11,6 +11,8 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { ShellProvider } from "../context/ShellProvider";
+import SidebarBackupActions from "./SidebarBackupActions";
+import BackupExportReminder from "./BackupExportReminder";
 
 const SIDEBAR_COLLAPSED_KEY = "easyscale:sidebar-collapsed";
 
@@ -31,7 +33,7 @@ function readSidebarCollapsed() {
   }
 }
 
-export default function AppShell({ children }) {
+export default function AppShell({ children, exportBackup, importBackup }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
 
   function toggleSidebar() {
@@ -48,6 +50,8 @@ export default function AppShell({ children }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-base text-ink">
+      <BackupExportReminder exportBackup={exportBackup} />
+
       {/* Sidebar - desktop */}
       <aside
         className={`hidden h-full shrink-0 flex-col overflow-hidden border-r border-border-soft bg-surface py-6 transition-[width,padding] duration-200 ease-out md:flex ${
@@ -61,6 +65,12 @@ export default function AppShell({ children }) {
             <SidebarLink key={item.to} {...item} collapsed={sidebarCollapsed} />
           ))}
         </nav>
+
+        <SidebarBackupActions
+          collapsed={sidebarCollapsed}
+          exportBackup={exportBackup}
+          importBackup={importBackup}
+        />
 
         <div className={`mt-4 ${sidebarCollapsed ? "flex justify-center" : ""}`}>
           <button

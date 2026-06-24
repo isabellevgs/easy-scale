@@ -17,7 +17,7 @@ export default function App() {
     <ToastProvider>
       <BrowserRouter>
         <ShiftsProvider shifts={data.shifts}>
-          <AppShell>
+          <AppShell exportBackup={data.exportBackup} importBackup={data.importBackup}>
           <Routes>
             <Route path="/" element={<HomePage people={data.people} rules={data.rules} holidays={data.holidays} />} />
             <Route
