@@ -24,9 +24,15 @@ function injectExportStyles(clonedDoc) {
       padding: 28px !important;
       background: var(--color-base) !important;
     }
-    .export-capture--rendering .export-week-grid {
-      display: grid !important;
-      grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    .export-capture--rendering .export-week-table {
+      width: 100% !important;
+      table-layout: fixed !important;
+    }
+    .export-capture--rendering .export-week-table th,
+    .export-capture--rendering .export-week-table td {
+      border-color: var(--color-border-soft) !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .export-capture--rendering .export-month-names {
       display: flex !important;
@@ -38,6 +44,15 @@ function injectExportStyles(clonedDoc) {
     }
     .export-capture--rendering button {
       cursor: default !important;
+    }
+    .export-capture--rendering .export-skip {
+      display: none !important;
+    }
+    .export-capture--rendering .week-needs-mobile {
+      display: none !important;
+    }
+    .export-capture--rendering .week-schedule-table-wrap {
+      display: block !important;
     }
   `;
   clonedDoc.head.appendChild(style);

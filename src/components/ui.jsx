@@ -1,13 +1,13 @@
-import { useShifts } from "../context/ShiftsContext";
+import { cloneElement, isValidElement, useId } from "react";
+import { useShifts } from "../hooks/useShifts";
 
 export function ShiftBadge({ shiftId, size = "md", count }) {
   const { shiftsById } = useShifts();
   const shift = shiftsById[shiftId];
   if (!shift) return null;
-  const Icon = shift.icon;
   const sizes = {
-    sm: count != null ? "min-h-5 px-2 py-0.5 text-[10px] gap-1" : "h-5 px-1.5 text-[10px] gap-0.5",
-    md: count != null ? "min-h-6 px-2.5 py-1 text-[11px] gap-1" : "h-6 px-2 text-[11px] gap-1",
+    sm: count != null ? "min-h-5 px-2 py-0.5 text-[10px]" : "h-5 px-1.5 text-[10px]",
+    md: count != null ? "min-h-6 px-2.5 py-1 text-[11px]" : "h-6 px-2 text-[11px]",
   };
   const label =
     count != null
@@ -24,7 +24,6 @@ export function ShiftBadge({ shiftId, size = "md", count }) {
       style={{ background: shift.soft, color: shift.color }}
       title={title}
     >
-      <Icon className={size === "sm" ? "h-3 w-3 shrink-0" : "h-3.5 w-3.5 shrink-0"} strokeWidth={2.25} />
       {label}
     </span>
   );
@@ -86,39 +85,58 @@ export function Card({ className = "", children, ...props }) {
   );
 }
 
-export function Modal({ open, onClose, title, children, width = "max-w-md" }) {
+export function Modal({ open, onClose, title, children, footer, width = "max-w-md" }) {
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`w-full ${width} rounded-2xl border border-border-soft bg-surface-2 p-5 shadow-2xl`}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-[16px] font-semibold text-ink">{title}</h2>
-          <button
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-ink-faint hover:bg-surface-3 hover:text-ink"
-            aria-label="Fechar"
-          >
-            ✕
-          </button>
+      <div className="flex min-h-full items-center justify-center">
+        <div
+          className={`flex max-h-[calc(100dvh-2rem)] w-full ${width} flex-col overflow-hidden rounded-2xl border border-border-soft bg-surface-2 p-5 shadow-2xl`}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="mb-4 flex shrink-0 items-center justify-between">
+            <h2 className="text-[16px] font-semibold text-ink">{title}</h2>
+            <button
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-ink-faint hover:bg-surface-3 hover:text-ink"
+              aria-label="Fechar"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          {footer ? (
+            <div className="mt-4 shrink-0 border-t border-border-soft pt-4">{footer}</div>
+          ) : null}
         </div>
-        {children}
       </div>
     </div>
   );
 }
 
-export function Field({ label, children, hint }) {
+export function Field({ label, children, hint, htmlFor }) {
+  const autoId = useId();
+  const canAssociate =
+    isValidElement(children) && typeof children.type === "string" && children.type === "input";
+  const inputId = htmlFor ?? (canAssociate ? children.props.id ?? autoId : undefined);
+
   return (
-    <label className="mb-3.5 block">
-      <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{label}</span>
-      {children}
+    <div className="mb-3.5 block">
+      {inputId ? (
+        <label htmlFor={inputId} className="mb-1.5 block text-[13px] font-medium text-ink-soft">
+          {label}
+        </label>
+      ) : (
+        <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{label}</span>
+      )}
+      {canAssociate ? cloneElement(children, { id: inputId }) : children}
       {hint && <span className="mt-1 block text-[12px] text-ink-faint">{hint}</span>}
-    </label>
+    </div>
   );
 }
 

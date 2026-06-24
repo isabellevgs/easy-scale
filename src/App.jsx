@@ -1,21 +1,23 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppShell from "./components/AppShell";
+import { ToastProvider } from "./components/Toast";
 import HomePage from "./pages/HomePage";
 import TeamPage from "./pages/TeamPage";
 import SchedulesPage from "./pages/SchedulesPage";
 import WeekPage from "./pages/WeekPage";
 import MonthPage from "./pages/MonthPage";
 import SettingsPage from "./pages/SettingsPage";
-import { ShiftsProvider } from "./context/ShiftsContext";
+import { ShiftsProvider } from "./context/ShiftsProvider";
 import { useAppData } from "./hooks/useAppData";
 
 export default function App() {
   const data = useAppData();
 
   return (
-    <BrowserRouter>
-      <ShiftsProvider shiftTimes={data.shiftTimes}>
-        <AppShell>
+    <ToastProvider>
+      <BrowserRouter>
+        <ShiftsProvider shifts={data.shifts}>
+          <AppShell>
           <Routes>
             <Route path="/" element={<HomePage people={data.people} rules={data.rules} holidays={data.holidays} />} />
             <Route
@@ -36,6 +38,7 @@ export default function App() {
                 <SchedulesPage
                   people={data.people}
                   rules={data.rules}
+                  holidays={data.holidays}
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
@@ -76,11 +79,14 @@ export default function App() {
                 <SettingsPage
                   people={data.people}
                   rules={data.rules}
-                  shiftTimes={data.shiftTimes}
+                  shifts={data.shifts}
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
-                  updateShiftTimes={data.updateShiftTimes}
-                  resetShiftTimes={data.resetShiftTimes}
+                  addShift={data.addShift}
+                  updateShift={data.updateShift}
+                  removeShift={data.removeShift}
+                  resetShifts={data.resetShifts}
+                  isDefaultShifts={data.isDefaultShifts}
                   updateShiftNeeds={data.updateShiftNeeds}
                   resetShiftNeeds={data.resetShiftNeeds}
                   addHoliday={data.addHoliday}
@@ -94,5 +100,6 @@ export default function App() {
         </AppShell>
       </ShiftsProvider>
     </BrowserRouter>
+    </ToastProvider>
   );
 }

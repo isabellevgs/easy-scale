@@ -16,19 +16,22 @@ import ScheduleViewToggle from "../components/ScheduleViewToggle";
 import StaffingLegend from "../components/StaffingLegend";
 import ShiftStaffingCard from "../components/ShiftStaffingCard";
 import ShiftStaffingPeopleModal from "../components/ShiftStaffingPeopleModal";
-import { getOccurrences, toISODate, groupByDate } from "../lib/schedule";
+import { getOccurrences, toISODate, groupByDate, filterOccurrencesByPerson, formatShiftDateLabel } from "../lib/schedule";
 import { WEEKDAY_LABELS, MONTH_LABELS, colorForPerson, peopleScheduledIn } from "../lib/constants";
 import { getDayStaffingRows } from "../lib/shiftNeeds";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
-import { useShifts } from "../context/ShiftsContext";
+import { usePersonFilter } from "../hooks/usePersonFilter";
+import { useShifts } from "../hooks/useShifts";
+import PersonFilterSelect from "../components/PersonFilterSelect";
 import PageContainer from "../components/PageContainer";
 
 export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
-  const { shifts } = useShifts();
+  const { shifts, shiftsById } = useShifts();
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayModalView, setDayModalView] = useState(SCHEDULE_VIEW.PEOPLE);
   const [staffingModal, setStaffingModal] = useState(null);
+  const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const exportRef = useRef(null);
   const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
 
@@ -59,14 +62,18 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
     () => getOccurrences(rules, rangeStart, rangeEnd, holidays),
     [rules, rangeStart, rangeEnd, holidays]
   );
-  const occByDate = useMemo(() => groupByDate(occurrences), [occurrences]);
+  const filteredOccurrences = useMemo(
+    () => filterOccurrencesByPerson(occurrences, personFilterIds),
+    [occurrences, personFilterIds]
+  );
+  const occByDate = useMemo(() => groupByDate(filteredOccurrences), [filteredOccurrences]);
 
   const todayISO = toISODate(new Date());
   const monthLabel = `${MONTH_LABELS[baseMonth.getMonth()]} de ${baseMonth.getFullYear()}`;
 
   const selectedOccurrences = selectedDay ? occByDate[selectedDay] || [] : [];
   const selectedStaffingRows = selectedDay
-    ? getDayStaffingRows(selectedOccurrences, shiftNeeds, selectedDay, shiftIds, holidays)
+    ? getDayStaffingRows(selectedOccurrences, shiftNeeds, selectedDay, shiftIds, holidays, shiftsById)
     : [];
 
   useEffect(() => {
@@ -80,7 +87,7 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
       shift,
       required: row.required,
       dateISO: toISODate(day),
-      dateLabel: format(day, "dd/MM/yyyy"),
+      dateLabel: formatShiftDateLabel(day),
     });
   }
 
@@ -125,7 +132,19 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
       {people.length === 0 ? (
         <EmptyState />
       ) : (
-        <ExportFrame innerRef={exportRef} title={monthLabel} subtitle="Escala mensal · Necessidade">
+        <ExportFrame
+          innerRef={exportRef}
+          title={monthLabel}
+          subtitle="Escala mensal · Necessidade"
+          headerExtra={
+            <PersonFilterSelect
+              className="export-skip"
+              people={people}
+              value={personFilterIds}
+              onChange={setPersonFilterIds}
+            />
+          }
+        >
           <Card className="overflow-hidden p-2 sm:p-3">
             <div className="grid grid-cols-7 gap-1 px-1 pb-2 pt-1">
               {WEEKDAY_LABELS.map((label) => (
@@ -145,7 +164,8 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
                   shiftNeeds,
                   iso,
                   shiftIds,
-                  holidays
+                  holidays,
+                  shiftsById
                 );
                 const hasContent = staffingRows.length > 0;
 
@@ -169,28 +189,28 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
 
                     {hasContent && (
                       <div className="mt-1 flex w-full flex-1 flex-col gap-1">
-                        <div className="flex flex-wrap gap-0.5">
-                          {staffingRows.map((row) => {
-                            const shift = shifts.find((item) => item.id === row.shiftId);
-                            if (!shift) return null;
-                            return (
-                              <span
-                                key={row.shiftId}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={(event) => event.stopPropagation()}
-                              >
-                                <ShiftStaffingCard
-                                  shift={shift}
-                                  required={row.required}
-                                  scheduled={row.scheduled}
-                                  status={row.status}
-                                  compact
-                                  onClick={() => openStaffingModal(day, row)}
-                                />
-                              </span>
-                            );
-                          })}
-                        </div>
+                        {staffingRows.map((row) => {
+                          const shift = shifts.find((item) => item.id === row.shiftId);
+                          if (!shift) return null;
+                          return (
+                            <span
+                              key={row.shiftId}
+                              className="w-full"
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={(event) => event.stopPropagation()}
+                            >
+                              <ShiftStaffingCard
+                                shift={shift}
+                                required={row.required}
+                                scheduled={row.scheduled}
+                                status={row.status}
+                                compact
+                                labeled
+                                onClick={() => openStaffingModal(day, row)}
+                              />
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </button>

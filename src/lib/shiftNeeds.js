@@ -1,13 +1,10 @@
-import { SHIFT_IDS } from "./shifts";
+import { getShiftIds, normalizeShifts } from "./shifts";
 
 /** Índices 0–6 = dom–sáb; 7 = template de feriado. */
 export const FERIADO_DAY_INDEX = 7;
 export const NEED_DAY_COUNT = 8;
 
 export const WEEKEND_DAYS = new Set([0, 6]);
-
-export const REGULAR_SHIFT_IDS = ["manha", "tarde", "noite"];
-export const FDS_SHIFT_IDS = ["fds_manha", "fds_noite"];
 
 function isWeekdayRow(dayIndex) {
   return dayIndex >= 1 && dayIndex <= 5;
@@ -17,23 +14,29 @@ function isWeekendOrFeriadoRow(dayIndex) {
   return dayIndex === FERIADO_DAY_INDEX || WEEKEND_DAYS.has(dayIndex);
 }
 
-export function isShiftNeedEditable(dayIndex, shiftId) {
-  if (REGULAR_SHIFT_IDS.includes(shiftId)) return isWeekdayRow(dayIndex);
-  if (FDS_SHIFT_IDS.includes(shiftId)) return isWeekendOrFeriadoRow(dayIndex);
+function getShiftScope(shiftId, shiftsById) {
+  return shiftsById?.[shiftId]?.scope ?? null;
+}
+
+export function isShiftNeedEditable(dayIndex, shiftId, shiftsById = {}) {
+  const scope = getShiftScope(shiftId, shiftsById);
+  if (scope === "weekday") return isWeekdayRow(dayIndex);
+  if (scope === "weekend") return isWeekendOrFeriadoRow(dayIndex);
   return true;
 }
 
-export function getApplicableShiftIdsForDate(dateISO, shiftIds, holidays = []) {
+export function getApplicableShiftIdsForDate(dateISO, shiftIds, holidays = [], shiftsById = {}) {
   const dayIndex = resolveNeedDayIndex(dateISO, holidays);
-  return shiftIds.filter((shiftId) => isShiftNeedEditable(dayIndex, shiftId));
+  return shiftIds.filter((shiftId) => isShiftNeedEditable(dayIndex, shiftId, shiftsById));
 }
 
-export function shiftNeedDisabledReason(dayIndex, shiftId) {
-  if (isShiftNeedEditable(dayIndex, shiftId)) return "";
-  if (REGULAR_SHIFT_IDS.includes(shiftId)) {
-    return "Manhã, Tarde e Noite só têm meta de segunda a sexta";
+export function shiftNeedDisabledReason(dayIndex, shiftId, shiftsById = {}) {
+  if (isShiftNeedEditable(dayIndex, shiftId, shiftsById)) return "";
+  const scope = getShiftScope(shiftId, shiftsById);
+  if (scope === "weekday") {
+    return "Turnos de segunda a sexta só têm meta nesses dias";
   }
-  return "FDS/Feriado só tem meta aos fins de semana e na linha Feriado";
+  return "Turnos de fim de semana/feriado só têm meta nesses dias e na linha Feriado";
 }
 
 export function normalizeHolidays(raw) {
@@ -47,20 +50,24 @@ export function resolveNeedDayIndex(dateISO, holidays = []) {
   return new Date(`${dateISO}T00:00:00`).getDay();
 }
 
-export function createEmptyDayNeeds() {
-  return Object.fromEntries(SHIFT_IDS.map((id) => [id, 0]));
+export function createEmptyDayNeeds(shiftIds) {
+  const ids = Array.isArray(shiftIds) ? shiftIds : getShiftIds();
+  return Object.fromEntries(ids.map((id) => [id, 0]));
 }
 
-export function normalizeShiftNeeds(raw) {
-  const result = Array.from({ length: NEED_DAY_COUNT }, () => createEmptyDayNeeds());
+export function normalizeShiftNeeds(raw, shiftsConfig) {
+  const normalizedShifts = normalizeShifts(shiftsConfig);
+  const shiftsById = Object.fromEntries(normalizedShifts.map((shift) => [shift.id, shift]));
+  const ids = normalizedShifts.map((shift) => shift.id);
+  const result = Array.from({ length: NEED_DAY_COUNT }, () => createEmptyDayNeeds(ids));
   if (!raw) return result;
 
   for (let day = 0; day < NEED_DAY_COUNT; day += 1) {
     const dayRaw = Array.isArray(raw) ? raw[day] : raw[day] ?? raw[String(day)];
     if (!dayRaw || typeof dayRaw !== "object") continue;
 
-    for (const id of SHIFT_IDS) {
-      if (!isShiftNeedEditable(day, id)) {
+    for (const id of ids) {
+      if (!isShiftNeedEditable(day, id, shiftsById)) {
         result[day][id] = 0;
         continue;
       }
@@ -75,22 +82,27 @@ export function normalizeShiftNeeds(raw) {
   return result;
 }
 
-export function getShiftNeed(shiftNeeds, dayIndex, shiftId) {
-  if (!isShiftNeedEditable(dayIndex, shiftId)) return 0;
+export function normalizeShiftNeedsForShifts(raw, shiftsConfig) {
+  return normalizeShiftNeeds(raw, shiftsConfig);
+}
+
+export function getShiftNeed(shiftNeeds, dayIndex, shiftId, shiftsById = {}) {
+  if (!isShiftNeedEditable(dayIndex, shiftId, shiftsById)) return 0;
   const day = shiftNeeds?.[dayIndex];
   if (!day) return 0;
   const value = day[shiftId];
   return typeof value === "number" && value >= 0 ? value : 0;
 }
 
-export function getShiftNeedForDate(shiftNeeds, dateISO, shiftId, holidays = []) {
+export function getShiftNeedForDate(shiftNeeds, dateISO, shiftId, holidays = [], shiftsById = {}) {
   const dayIndex = resolveNeedDayIndex(dateISO, holidays);
-  return getShiftNeed(shiftNeeds, dayIndex, shiftId);
+  return getShiftNeed(shiftNeeds, dayIndex, shiftId, shiftsById);
 }
 
-export function isDefaultShiftNeeds(shiftNeeds) {
-  const normalized = normalizeShiftNeeds(shiftNeeds);
-  return normalized.every((day) => SHIFT_IDS.every((id) => day[id] === 0));
+export function isDefaultShiftNeeds(shiftNeeds, shiftsConfig) {
+  const ids = getShiftIds(shiftsConfig);
+  const normalized = normalizeShiftNeedsForShifts(shiftNeeds, shiftsConfig);
+  return normalized.every((day) => ids.every((id) => day[id] === 0));
 }
 
 export const STAFFING_STATUS = {
@@ -107,20 +119,27 @@ export function getStaffingStatus(required, scheduled) {
   return STAFFING_STATUS.OK;
 }
 
-export function getShiftStaffing(dayOccurrences, shiftId, shiftNeeds, dayIndex) {
-  const required = getShiftNeed(shiftNeeds, dayIndex, shiftId);
+export function getShiftStaffing(dayOccurrences, shiftId, shiftNeeds, dayIndex, shiftsById = {}) {
+  const required = getShiftNeed(shiftNeeds, dayIndex, shiftId, shiftsById);
   const scheduled = dayOccurrences.filter((occ) => occ.shift === shiftId).length;
   const status = getStaffingStatus(required, scheduled);
 
   return { required, scheduled, status };
 }
 
-export function getDayStaffingRows(dayOccurrences, shiftNeeds, dateISO, shiftIds, holidays = []) {
+export function getDayStaffingRows(
+  dayOccurrences,
+  shiftNeeds,
+  dateISO,
+  shiftIds,
+  holidays = [],
+  shiftsById = {}
+) {
   const dayIndex = resolveNeedDayIndex(dateISO, holidays);
   return shiftIds
     .map((shiftId) => ({
       shiftId,
-      ...getShiftStaffing(dayOccurrences, shiftId, shiftNeeds, dayIndex),
+      ...getShiftStaffing(dayOccurrences, shiftId, shiftNeeds, dayIndex, shiftsById),
     }))
     .filter((row) => row.required > 0 || row.scheduled > 0);
 }
@@ -148,9 +167,9 @@ export function staffingStatusStyles(status) {
       };
     case STAFFING_STATUS.OVER:
       return {
-        bg: "color-mix(in srgb, var(--color-brand) 16%, transparent)",
-        border: "color-mix(in srgb, var(--color-brand) 42%, transparent)",
-        text: "var(--color-brand)",
+        bg: "color-mix(in srgb, var(--color-over) 16%, transparent)",
+        border: "color-mix(in srgb, var(--color-over) 42%, transparent)",
+        text: "var(--color-over)",
       };
     default:
       return {
@@ -159,6 +178,33 @@ export function staffingStatusStyles(status) {
         text: "var(--color-ink-soft)",
       };
   }
+}
+
+export function staffingCellBackground(status) {
+  if (status === STAFFING_STATUS.NONE) return null;
+
+  switch (status) {
+    case STAFFING_STATUS.OK:
+      return "color-mix(in srgb, var(--color-good) 42%, var(--color-surface))";
+    case STAFFING_STATUS.SHORT:
+      return "color-mix(in srgb, var(--color-bad) 42%, var(--color-surface))";
+    case STAFFING_STATUS.OVER:
+      return "color-mix(in srgb, var(--color-over) 42%, var(--color-surface))";
+    default:
+      return null;
+  }
+}
+
+export function staffingCellVisual(status) {
+  if (status === STAFFING_STATUS.NONE) return null;
+  const styles = staffingStatusStyles(status);
+  const background = staffingCellBackground(status);
+  if (!background) return null;
+
+  return {
+    background,
+    boxShadow: `inset 0 0 0 1px ${styles.border}`,
+  };
 }
 
 export function staffingStatusLabel(status, required, scheduled) {
@@ -173,4 +219,15 @@ export function staffingStatusLabel(status, required, scheduled) {
   }
   if (status === STAFFING_STATUS.OK) return `Completo · ${scheduled}/${required}`;
   return `${scheduled}/${required}`;
+}
+
+export function pruneShiftNeeds(shiftNeeds, shiftIds) {
+  const ids = new Set(shiftIds);
+  return shiftNeeds.map((day) => {
+    const next = {};
+    for (const id of ids) {
+      next[id] = typeof day?.[id] === "number" ? day[id] : 0;
+    }
+    return next;
+  });
 }

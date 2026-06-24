@@ -4,10 +4,12 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarRange, CalendarDays, Users, ArrowRight } from "lucide-react";
 import { Card, PersonAvatar } from "../components/ui";
-import { getOccurrences, toISODate } from "../lib/schedule";
+import { getOccurrences, toISODate, filterOccurrencesByPerson } from "../lib/schedule";
 import { colorForPerson, MONTH_LABELS, peopleScheduledIn } from "../lib/constants";
 import { getApplicableShiftIdsForDate } from "../lib/shiftNeeds";
-import { useShifts } from "../context/ShiftsContext";
+import { usePersonFilter } from "../hooks/usePersonFilter";
+import { useShifts } from "../hooks/useShifts";
+import PersonFilterSelect from "../components/PersonFilterSelect";
 import PageContainer from "../components/PageContainer";
 
 function greeting() {
@@ -18,20 +20,26 @@ function greeting() {
 }
 
 export default function HomePage({ people, rules, holidays = [] }) {
-  const { shifts } = useShifts();
+  const { shifts, shiftsById } = useShifts();
+  const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const today = useMemo(() => new Date(), []);
   const todayISO = toISODate(today);
   const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
 
   const todayOccurrences = useMemo(
-    () => getOccurrences(rules, todayISO, todayISO, holidays),
-    [rules, todayISO, holidays]
+    () => filterOccurrencesByPerson(
+      getOccurrences(rules, todayISO, todayISO, holidays),
+      personFilterIds
+    ),
+    [rules, todayISO, holidays, personFilterIds]
   );
 
   const todayShifts = useMemo(() => {
-    const applicableIds = new Set(getApplicableShiftIdsForDate(todayISO, shiftIds, holidays));
+    const applicableIds = new Set(
+      getApplicableShiftIdsForDate(todayISO, shiftIds, holidays, shiftsById)
+    );
     return shifts.filter((shift) => applicableIds.has(shift.id));
-  }, [todayISO, shiftIds, holidays, shifts]);
+  }, [todayISO, shiftIds, holidays, shifts, shiftsById]);
 
   const shiftsByPersonToday = useMemo(() => {
     const map = new Map();
@@ -62,7 +70,16 @@ export default function HomePage({ people, rules, holidays = [] }) {
       <Card className="mt-6 overflow-hidden">
         <div className="px-6 py-6">
           <>
-            <h2 className="text-[16px] font-semibold text-ink">Quem trabalha hoje</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-[16px] font-semibold text-ink">Quem trabalha hoje</h2>
+              {people.length > 0 && (
+                <PersonFilterSelect
+                  people={people}
+                  value={personFilterIds}
+                  onChange={setPersonFilterIds}
+                />
+              )}
+            </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[720px] border-collapse text-[13px]">
                 <thead>
@@ -71,7 +88,6 @@ export default function HomePage({ people, rules, holidays = [] }) {
                       Pessoas
                     </th>
                     {todayShifts.map((shift) => {
-                      const Icon = shift.icon;
                       const count = todayOccurrences.filter((occ) => occ.shift === shift.id).length;
                       return (
                         <th
@@ -80,10 +96,9 @@ export default function HomePage({ people, rules, holidays = [] }) {
                         >
                           <div className="flex flex-col items-center gap-1.5">
                             <span
-                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium normal-case tracking-normal"
+                              className="inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium normal-case tracking-normal"
                               style={{ background: shift.soft, color: shift.color }}
                             >
-                              <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
                               {shift.label}
                             </span>
                             <span className="text-[10px] font-normal normal-case text-ink-faint">

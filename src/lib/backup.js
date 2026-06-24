@@ -48,7 +48,7 @@ function extractBackupData(parsed) {
     return normalizeState(parsed.data);
   }
 
-  if (Array.isArray(parsed.people) || Array.isArray(parsed.rules) || parsed.shiftTimes) {
+  if (Array.isArray(parsed.people) || Array.isArray(parsed.rules) || parsed.shifts || parsed.shiftTimes) {
     return normalizeState(parsed);
   }
 
@@ -78,6 +78,6 @@ export function describeBackupContents(state) {
   return {
     people: data.people.length,
     rules: data.rules.length,
-    hasShiftTimes: Boolean(data.shiftTimes),
+    shifts: data.shifts.length,
   };
 }

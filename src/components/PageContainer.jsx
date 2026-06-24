@@ -1,4 +1,4 @@
-import { useShell } from "../context/ShellContext";
+import { useShell } from "../hooks/useShell";
 
 const WIDTHS = {
   narrow: {

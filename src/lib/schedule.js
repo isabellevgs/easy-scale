@@ -5,6 +5,8 @@ import {
   isBefore,
   isAfter,
 } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { WEEKDAY_LABELS_FULL } from "./constants";
 
 // ---- Helpers de data (strings ISO 'yyyy-MM-dd' são a fonte da verdade) ----
 
@@ -14,6 +16,12 @@ export function toISODate(date) {
 
 export function fromISODate(iso) {
   return startOfDay(parseISO(iso));
+}
+
+/** Ex.: "Quarta · 24/06/2026" */
+export function formatShiftDateLabel(date) {
+  const weekday = WEEKDAY_LABELS_FULL[date.getDay()].split("-")[0];
+  return `${weekday} · ${format(date, "dd/MM/yyyy", { locale: ptBR })}`;
 }
 
 function inRange(dateISO, startISO, endISO) {
@@ -102,6 +110,13 @@ export function getOccurrences(rules, rangeStartISO, rangeEndISO, holidays = [])
     }
   }
   return occurrences;
+}
+
+/** Mantém ocorrências das pessoas informadas (array vazio = sem filtro). */
+export function filterOccurrencesByPerson(occurrences, personIds) {
+  if (!personIds?.length) return occurrences;
+  const allowed = new Set(personIds);
+  return occurrences.filter((occ) => allowed.has(occ.personId));
 }
 
 /** Agrupa ocorrências por data ISO -> array de ocorrências */

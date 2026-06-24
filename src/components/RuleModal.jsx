@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button, Modal, Field, inputClass } from "./ui";
 import { WEEKDAY_LABELS } from "../lib/constants";
-import { useShifts } from "../context/ShiftsContext";
+import { useShifts } from "../hooks/useShifts";
+import { emptyRule } from "../lib/rules";
 import { toISODate } from "../lib/schedule";
 
 const RECURRENCE_TYPES = [
@@ -11,16 +12,6 @@ const RECURRENCE_TYPES = [
 
 function todayISO() {
   return toISODate(new Date());
-}
-
-export function emptyRule(personId) {
-  return {
-    personId: personId || "",
-    shifts: [],
-    recurrence: { type: "weekly", weekdays: [] },
-    startDate: todayISO(),
-    endDate: "",
-  };
 }
 
 export default function RuleModal({ open, people, initial, onClose, onSave }) {
@@ -53,10 +44,8 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
 
   function toggleShift(shiftId) {
     setForm((f) => {
-      const next = f.shifts.includes(shiftId)
-        ? f.shifts.filter((s) => s !== shiftId)
-        : [...f.shifts, shiftId];
-      return { ...f, shifts: next };
+      const isOnlySelected = f.shifts.length === 1 && f.shifts[0] === shiftId;
+      return { ...f, shifts: isOnlySelected ? [] : [shiftId] };
     });
   }
 
@@ -99,7 +88,7 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
             </select>
           </Field>
 
-          <Field label="Turno(s)" hint="Selecione um ou mais turnos para esta regra.">
+          <Field label="Turno" hint="Em dias úteis (seg–sex), uma pessoa só pode ter um turno por dia.">
             <div className="flex flex-wrap gap-2">
               {shifts.map((s) => {
                 const active = form.shifts.includes(s.id);

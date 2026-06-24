@@ -1,20 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarPlus, ChevronDown, Pencil, Trash2 } from "lucide-react";
-import { Modal, PersonAvatar, Button, Field, inputClass, IconButton } from "./ui";
-import RuleModal from "./RuleModal";
-import { colorForPerson, peopleScheduledIn, sortPeopleByName, WEEKDAY_LABELS } from "../lib/constants";
+import { Check, Repeat } from "lucide-react";
+import { Modal, PersonAvatar, IconButton } from "./ui";
+import ShiftRecurrenceModal from "./ShiftRecurrenceModal";
+import { colorForPerson, peopleScheduledIn, sortPeopleByName } from "../lib/constants";
 import {
   getStaffingStatus,
   staffingStatusLabel,
   staffingStatusStyles,
 } from "../lib/shiftNeeds";
 import { getOccurrences } from "../lib/schedule";
-
-const RECURRENCE_TYPES = [
-  { id: "specific_date", label: "Dia específico" },
-  { id: "weekly", label: "Semanal" },
-];
+import { isPersonShiftRecurring, togglePersonShiftOnDate } from "../lib/scheduleToggle";
+import { requiresSingleShiftPerPerson } from "../lib/scheduleValidation";
+import { usePersist } from "../hooks/usePersist";
+import { useShifts } from "../hooks/useShifts";
 
 export default function ShiftStaffingPeopleModal({
   open,
@@ -30,305 +29,189 @@ export default function ShiftStaffingPeopleModal({
   updateRule,
   removeRule,
 }) {
-  const [personId, setPersonId] = useState("");
-  const [recurrenceType, setRecurrenceType] = useState("specific_date");
-  const [weekdays, setWeekdays] = useState([]);
-  const [endDate, setEndDate] = useState("");
-  const [addOpen, setAddOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  const { shiftsById } = useShifts();
+  const { persist } = usePersist();
+  const [recurrencePerson, setRecurrencePerson] = useState(null);
 
-  const contextDayOfWeek = useMemo(() => {
-    if (!dateISO) return 0;
-    return new Date(`${dateISO}T00:00:00`).getDay();
-  }, [dateISO]);
+  const dayOccurrences = useMemo(() => {
+    if (!open || !dateISO) return [];
+    return getOccurrences(rules, dateISO, dateISO, holidays);
+  }, [open, dateISO, rules, holidays]);
 
   const shiftOccs = useMemo(() => {
-    if (!open || !dateISO || !shift) return [];
-    const dayOccurrences = getOccurrences(rules, dateISO, dateISO, holidays);
+    if (!shift) return [];
     return dayOccurrences.filter((occ) => occ.shift === shift.id);
-  }, [open, dateISO, shift, rules, holidays]);
+  }, [dayOccurrences, shift]);
 
   const scheduledPeople = useMemo(
     () => peopleScheduledIn(shiftOccs, allPeople),
     [shiftOccs, allPeople]
   );
 
-  const scheduledEntries = useMemo(() => {
-    const peopleById = Object.fromEntries(allPeople.map((person) => [person.id, person]));
-    const rulesById = Object.fromEntries(rules.map((rule) => [rule.id, rule]));
-    const seen = new Set();
-
-    return shiftOccs
-      .map((occ) => {
-        const person = peopleById[occ.personId];
-        const rule = rulesById[occ.ruleId];
-        if (!person || !rule || seen.has(rule.id)) return null;
-        seen.add(rule.id);
-        return { person, rule };
-      })
-      .filter(Boolean)
-      .sort((a, b) =>
-        a.person.nome.localeCompare(b.person.nome, "pt-BR", { sensitivity: "base" })
-      );
-  }, [shiftOccs, allPeople, rules]);
-
-  const availablePeople = useMemo(
-    () => allPeople.filter((person) => !scheduledPeople.some((item) => item.id === person.id)),
-    [allPeople, scheduledPeople]
+  const scheduledIds = useMemo(
+    () => new Set(scheduledPeople.map((person) => person.id)),
+    [scheduledPeople]
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setAddOpen(false);
-    setEditingRule(null);
-    setConfirmDelete(null);
-    setRecurrenceType("specific_date");
-    setWeekdays([contextDayOfWeek]);
-    setEndDate("");
-    setPersonId(availablePeople[0]?.id ?? "");
-  }, [open, dateISO, shift?.id, contextDayOfWeek, availablePeople]);
+  const otherShiftByPerson = useMemo(() => {
+    if (!shift) return new Map();
+    const map = new Map();
+    for (const occ of dayOccurrences) {
+      if (occ.shift === shift.id) continue;
+      map.set(occ.personId, occ.shift);
+    }
+    return map;
+  }, [dayOccurrences, shift]);
 
   if (!shift) return null;
 
+  const enforceSingleShift = requiresSingleShiftPerPerson(dateISO, holidays);
   const scheduled = shiftOccs.length;
   const status = getStaffingStatus(required, scheduled);
   const styles = staffingStatusStyles(status);
   const detail = staffingStatusLabel(status, required, scheduled);
-  const Icon = shift.icon;
 
-  const isValid =
-    personId &&
-    (recurrenceType === "specific_date" || weekdays.length > 0);
+  function handleToggle(personId) {
+    if (!dateISO || !shift) return;
+    const removing = scheduledIds.has(personId);
+    if (!removing && enforceSingleShift && otherShiftByPerson.has(personId)) return;
 
-  function toggleWeekday(day) {
-    setWeekdays((current) =>
-      current.includes(day) ? current.filter((item) => item !== day) : [...current, day]
+    persist(
+      () =>
+        togglePersonShiftOnDate(
+          { rules, addRule, updateRule, removeRule, holidays, shiftsById },
+          { personId, shiftId: shift.id, dateISO }
+        ),
+      removing ? "Removido do turno." : "Adicionado ao turno.",
+      "Não foi possível atualizar a escala."
     );
   }
 
-  function handleAdd(event) {
-    event.preventDefault();
-    if (!isValid || !dateISO) return;
-
-    if (recurrenceType === "specific_date") {
-      addRule({
-        personId,
-        shifts: [shift.id],
-        recurrence: { type: "specific_date", date: dateISO },
-        startDate: "",
-        endDate: "",
-      });
-      return;
-    }
-
-    addRule({
-      personId,
-      shifts: [shift.id],
-      recurrence: { type: "weekly", weekdays },
-      startDate: dateISO,
-      endDate,
-    });
+  function handleClose() {
+    setRecurrencePerson(null);
+    onClose();
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`${shift.label} · ${dateLabel}`} width="max-w-lg">
-      <div
-        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium"
-        style={{ background: styles.bg, border: `1px solid ${styles.border}`, color: styles.text }}
-      >
-        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} style={{ color: shift.color }} />
-        {detail}
-      </div>
-
-      <div className="mt-4">
-        {scheduledEntries.length === 0 ? (
-          <p className="text-[14px] text-ink-faint">Ninguém escalado</p>
-        ) : (
-          <div className="space-y-2">
-            {scheduledEntries.map(({ person, rule }) => (
-              <div key={rule.id} className="flex items-center gap-2.5">
-                <PersonAvatar
-                  nome={person.nome}
-                  color={colorForPerson(person.id, allPeople)}
-                  size={26}
-                />
-                <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{person.nome}</span>
-                <IconButton onClick={() => setEditingRule(rule)} aria-label="Editar escala">
-                  <Pencil className="h-4 w-4" />
-                </IconButton>
-                <IconButton
-                  variant="danger"
-                  onClick={() => setConfirmDelete(rule)}
-                  aria-label="Remover escala"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </IconButton>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-5 border-t border-border-soft pt-4">
-        <button
-          type="button"
-          onClick={() => setAddOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-3 text-left transition-opacity hover:opacity-90"
-          aria-expanded={addOpen}
+    <>
+      <Modal open={open} onClose={handleClose} title={`${shift.label} · ${dateLabel}`} width="max-w-md">
+        <div
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium"
+          style={{ background: styles.bg, border: `1px solid ${styles.border}`, color: styles.text }}
         >
-          <span className="text-[13px] font-medium text-ink">Adicionar na escala</span>
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-ink-faint transition-transform duration-200 ${
-              addOpen ? "rotate-180" : ""
-            }`}
-          />
-        </button>
+          {detail}
+        </div>
 
-        {addOpen && (
-          <div className="mt-3">
-            {allPeople.length === 0 ? (
-              <p className="text-[13px] text-ink-soft">
-                Cadastre pessoas na{" "}
-                <Link to="/equipe" className="text-brand hover:underline" onClick={onClose}>
-                  equipe
-                </Link>{" "}
-                antes de montar a escala.
-              </p>
-            ) : availablePeople.length === 0 ? (
-              <p className="text-[13px] text-ink-soft">Toda a equipe já está escalada neste turno.</p>
-            ) : (
-              <form onSubmit={handleAdd} className="space-y-3">
-                <Field label="Pessoa">
-                  <select
-                    className={inputClass}
-                    value={personId}
-                    onChange={(event) => setPersonId(event.target.value)}
+        <p className="mt-4 text-[13px] text-ink-soft">
+          {enforceSingleShift
+            ? "Selecione quem trabalha neste turno. Em dias úteis (seg–sex), cada pessoa só pode ter um turno."
+            : "Selecione quem trabalha neste turno. Fins de semana e feriados permitem mais de um turno por pessoa."}
+        </p>
+
+        {allPeople.length === 0 ? (
+          <p className="mt-4 text-[13px] text-ink-soft">
+            Cadastre pessoas na{" "}
+            <Link to="/equipe" className="text-brand hover:underline" onClick={handleClose}>
+              equipe
+            </Link>{" "}
+            antes de montar a escala.
+          </p>
+        ) : (
+          <div className="mt-3 max-h-[min(420px,55vh)] space-y-1.5 overflow-y-auto pr-0.5">
+            {sortPeopleByName(allPeople).map((person) => {
+              const selected = scheduledIds.has(person.id);
+              const blockedShiftId = otherShiftByPerson.get(person.id);
+              const blocked = enforceSingleShift && !selected && Boolean(blockedShiftId);
+              const blockedLabel = blockedShiftId ? shiftsById[blockedShiftId]?.label : null;
+              const personColor = colorForPerson(person.id, allPeople);
+              const recurring =
+                selected &&
+                isPersonShiftRecurring(
+                  rules,
+                  { personId: person.id, shiftId: shift.id, dateISO },
+                  holidays
+                );
+
+              return (
+                <div
+                  key={person.id}
+                  className={`relative rounded-xl border transition-colors ${
+                    selected
+                      ? "border-brand/40 bg-brand-soft/25"
+                      : blocked
+                        ? "border-border-soft bg-surface/40 opacity-70"
+                        : "border-border-soft"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(person.id)}
+                    disabled={blocked}
+                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                      selected
+                        ? "pr-11 hover:bg-brand-soft/35"
+                        : blocked
+                          ? "cursor-not-allowed"
+                          : "hover:bg-surface-2"
+                    }`}
+                    aria-pressed={selected}
+                    title={blocked ? `Já escalado(a) no turno ${blockedLabel}` : undefined}
                   >
-                    {availablePeople.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.nome}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        selected ? "border-brand bg-brand text-base" : "border-border bg-surface"
+                      }`}
+                    >
+                      {selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                    </span>
+                    <PersonAvatar nome={person.nome} color={personColor} size={28} />
+                    <span
+                      className="min-w-0 flex-1 truncate text-[14px] font-medium"
+                      style={{ color: selected ? personColor : undefined }}
+                    >
+                      {person.nome}
+                    </span>
+                    {blocked && blockedLabel && (
+                      <span className="shrink-0 text-[11px] text-ink-faint">Em {blockedLabel}</span>
+                    )}
+                  </button>
 
-                <Field label="Tipo de recorrência">
-                  <div className="grid grid-cols-2 gap-2">
-                    {RECURRENCE_TYPES.map((type) => (
-                      <button
-                        key={type.id}
-                        type="button"
-                        onClick={() => setRecurrenceType(type.id)}
-                        className={`rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
-                          recurrenceType === type.id
-                            ? "border-brand bg-brand-soft text-brand"
-                            : "border-border text-ink-soft hover:bg-surface-2"
-                        }`}
-                      >
-                        {type.label}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                {recurrenceType === "specific_date" ? (
-                  <Field label="Data">
-                    <input type="date" className={inputClass} value={dateISO} readOnly />
-                  </Field>
-                ) : (
-                  <>
-                    <Field label="Dias da semana">
-                      <div className="flex flex-wrap gap-1.5">
-                        {WEEKDAY_LABELS.map((label, index) => {
-                          const active = weekdays.includes(index);
-                          return (
-                            <button
-                              key={label}
-                              type="button"
-                              onClick={() => toggleWeekday(index)}
-                              className={`h-9 w-12 rounded-lg border text-[12px] font-medium transition-colors ${
-                                active
-                                  ? "border-brand bg-brand-soft text-brand"
-                                  : "border-border text-ink-soft hover:bg-surface-2"
-                              }`}
-                            >
-                              {label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </Field>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Início">
-                        <input type="date" className={inputClass} value={dateISO} readOnly />
-                      </Field>
-                      <Field label="Fim (opcional)" hint="Vazio = sem data de término">
-                        <input
-                          type="date"
-                          className={inputClass}
-                          value={endDate}
-                          onChange={(event) => setEndDate(event.target.value)}
-                        />
-                      </Field>
-                    </div>
-                  </>
-                )}
-
-                <div className="flex justify-end pt-1">
-                  <Button type="submit" disabled={!isValid}>
-                    <CalendarPlus className="h-4 w-4" />
-                    Adicionar
-                  </Button>
+                  {selected && (
+                    <IconButton
+                      className={`absolute right-1 top-1/2 z-10 -translate-y-1/2 ${
+                        recurring ? "text-brand hover:text-brand" : ""
+                      }`}
+                      onClick={() => setRecurrencePerson(person)}
+                      aria-label="Configurar recorrência"
+                      title={
+                        recurring
+                          ? "Escala semanal — toque para editar"
+                          : "Só este dia — toque para tornar recorrente"
+                      }
+                    >
+                      <Repeat className={`h-4 w-4 ${recurring ? "text-brand" : "text-ink-faint"}`} />
+                    </IconButton>
+                  )}
                 </div>
-              </form>
-            )}
-
-            <p className="mt-3 text-[12px] text-ink-faint">
-              {recurrenceType === "specific_date"
-                ? `Cria uma escala só para ${dateLabel}.`
-                : "Cria uma escala semanal recorrente a partir desta data."}{" "}
-              <Link
-                to="/escalas"
-                className="text-ink-soft hover:text-ink hover:underline"
-                onClick={onClose}
-              >
-                Ver todas as escalas
-              </Link>
-            </p>
+              );
+            })}
           </div>
         )}
-      </div>
-
-      <RuleModal
-        open={!!editingRule}
-        people={sortPeopleByName(allPeople)}
-        initial={editingRule}
-        onClose={() => setEditingRule(null)}
-        onSave={(ruleData) => {
-          updateRule(editingRule.id, ruleData);
-          setEditingRule(null);
-        }}
-      />
-
-      <Modal open={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Remover escala">
-        <p className="text-[14px] text-ink-soft">Tem certeza que deseja remover esta regra de escala?</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
-            Cancelar
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              removeRule(confirmDelete.id);
-              setConfirmDelete(null);
-            }}
-          >
-            Remover
-          </Button>
-        </div>
       </Modal>
-    </Modal>
+
+      <ShiftRecurrenceModal
+        open={!!recurrencePerson}
+        onClose={() => setRecurrencePerson(null)}
+        person={recurrencePerson}
+        shift={shift}
+        dateISO={dateISO}
+        dateLabel={dateLabel}
+        rules={rules}
+        holidays={holidays}
+        addRule={addRule}
+        updateRule={updateRule}
+        removeRule={removeRule}
+      />
+    </>
   );
 }

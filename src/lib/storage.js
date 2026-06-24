@@ -1,27 +1,56 @@
-import { normalizeShiftTimes, DEFAULT_SHIFT_TIMES } from "./shifts";
-import { normalizeShiftNeeds, normalizeHolidays } from "./shiftNeeds";
-import { sortPeopleByName } from "./constants";
+import { normalizeShifts, DEFAULT_SHIFTS } from "./shifts";
+import { normalizeShiftNeedsForShifts, normalizeHolidays } from "./shiftNeeds";
+import { sortPeopleByName, isValidPersonColor, normalizeHexColor, PEOPLE_PALETTE } from "./constants";
 
 const STORAGE_KEY = "easyscale:v1";
 
 export const DEFAULT_STATE = {
   people: [],
   rules: [],
-  shiftTimes: DEFAULT_SHIFT_TIMES,
-  shiftNeeds: normalizeShiftNeeds(null),
+  shifts: DEFAULT_SHIFTS,
+  shiftNeeds: normalizeShiftNeedsForShifts(null, DEFAULT_SHIFTS),
   holidays: [],
 };
+
+function normalizePerson(raw) {
+  if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || typeof raw.nome !== "string") {
+    return null;
+  }
+
+  const nome = raw.nome.trim();
+  if (!nome) return null;
+
+  const person = { id: raw.id, nome };
+  const cargo = typeof raw.cargo === "string" ? raw.cargo.trim() : "";
+  if (cargo) person.cargo = cargo;
+  if (isValidPersonColor(raw.color)) person.color = normalizeHexColor(raw.color);
+  return person;
+}
+
+function ensurePersonColor(people) {
+  return people.map((person, idx) => {
+    if (person.color && isValidPersonColor(person.color)) {
+      return { ...person, color: normalizeHexColor(person.color) };
+    }
+    return { ...person, color: PEOPLE_PALETTE[idx % PEOPLE_PALETTE.length] };
+  });
+}
 
 export function normalizeState(parsed) {
   if (!parsed || typeof parsed !== "object") {
     return structuredClone(DEFAULT_STATE);
   }
 
+  const shifts = normalizeShifts(parsed.shifts, parsed.shiftTimes);
+  const people = Array.isArray(parsed.people)
+    ? ensurePersonColor(sortPeopleByName(parsed.people.map(normalizePerson).filter(Boolean)))
+    : [];
+
   return {
-    people: Array.isArray(parsed.people) ? sortPeopleByName(parsed.people) : [],
+    people,
     rules: Array.isArray(parsed.rules) ? parsed.rules : [],
-    shiftTimes: normalizeShiftTimes(parsed.shiftTimes),
-    shiftNeeds: normalizeShiftNeeds(parsed.shiftNeeds),
+    shifts,
+    shiftNeeds: normalizeShiftNeedsForShifts(parsed.shiftNeeds, shifts),
     holidays: normalizeHolidays(parsed.holidays),
   };
 }
@@ -39,8 +68,15 @@ export function loadState() {
 export function saveState(state) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // localStorage indisponível (modo privado, quota etc.) — falha silenciosa
+    return { ok: true };
+  } catch (err) {
+    const isQuota = err?.name === "QuotaExceededError";
+    return {
+      ok: false,
+      error: isQuota
+        ? "Espaço de armazenamento esgotado neste dispositivo."
+        : "Não foi possível salvar as alterações neste dispositivo.",
+    };
   }
 }
 

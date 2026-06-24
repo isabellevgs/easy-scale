@@ -10,7 +10,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import { ShellProvider } from "../context/ShellContext";
+import { ShellProvider } from "../context/ShellProvider";
 
 const SIDEBAR_COLLAPSED_KEY = "easyscale:sidebar-collapsed";
 

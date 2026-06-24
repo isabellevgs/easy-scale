@@ -1,11 +1,29 @@
 import { useMemo, useRef, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Settings2, RotateCcw, Download, Upload, HardDriveDownload, UsersRound, CalendarDays, Trash2, Plus } from "lucide-react";
-import { Button, Card, Field, inputClass, Modal } from "../components/ui";
-import { useShifts } from "../context/ShiftsContext";
-import { DEFAULT_SHIFT_TIMES, SHIFT_IDS } from "../lib/shifts";
-import { isDefaultShiftNeeds, isShiftNeedEditable, shiftNeedDisabledReason, FERIADO_DAY_INDEX } from "../lib/shiftNeeds";
+import {
+  Settings2,
+  RotateCcw,
+  Download,
+  Upload,
+  HardDriveDownload,
+  UsersRound,
+  CalendarDays,
+  Trash2,
+  Plus,
+  Pencil,
+} from "lucide-react";
+import { Button, Card, inputClass, Modal, IconButton } from "../components/ui";
+import ShiftModal from "../components/ShiftModal";
+import { usePersist } from "../hooks/usePersist";
+import { useShifts } from "../hooks/useShifts";
+import { countRulesUsingShift } from "../lib/shifts";
+import {
+  isDefaultShiftNeeds,
+  isShiftNeedEditable,
+  shiftNeedDisabledReason,
+  FERIADO_DAY_INDEX,
+} from "../lib/shiftNeeds";
 import { WEEKDAY_LABELS_FULL } from "../lib/constants";
 import { describeBackupContents, readBackupFile } from "../lib/backup";
 import { toISODate } from "../lib/schedule";
@@ -14,11 +32,14 @@ import PageContainer from "../components/PageContainer";
 export default function SettingsPage({
   people,
   rules,
-  shiftTimes,
+  shifts: shiftsConfig,
   shiftNeeds,
   holidays,
-  updateShiftTimes,
-  resetShiftTimes,
+  addShift,
+  updateShift,
+  removeShift,
+  resetShifts,
+  isDefaultShifts,
   updateShiftNeeds,
   resetShiftNeeds,
   addHoliday,
@@ -26,48 +47,42 @@ export default function SettingsPage({
   exportBackup,
   importBackup,
 }) {
-  const { shifts } = useShifts();
+  const { shifts, shiftsById } = useShifts();
+  const { notifySave, persist } = usePersist();
   const fileInputRef = useRef(null);
-  const [saved, setSaved] = useState(false);
+  const needSaveGenRef = useRef(0);
+  const needSaveTimerRef = useRef(null);
   const [importError, setImportError] = useState("");
   const [pendingFile, setPendingFile] = useState(null);
   const [pendingPreview, setPendingPreview] = useState(null);
   const [importing, setImporting] = useState(false);
   const [newHoliday, setNewHoliday] = useState("");
   const [holidayError, setHolidayError] = useState("");
+  const [shiftModal, setShiftModal] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const summary = describeBackupContents({ people, rules, shiftTimes });
-
-  function flashSaved() {
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1800);
-  }
-
-  function handleChange(shiftId, field, value) {
-    updateShiftTimes({
-      ...shiftTimes,
-      [shiftId]: {
-        ...shiftTimes[shiftId],
-        [field]: value,
-      },
-    });
-    flashSaved();
-  }
+  const summary = describeBackupContents({ people, rules, shifts: shiftsConfig });
 
   function handleNeedChange(dayIndex, shiftId, value) {
-    if (!isShiftNeedEditable(dayIndex, shiftId)) return;
+    if (!isShiftNeedEditable(dayIndex, shiftId, shiftsById)) return;
     const parsed = Math.max(0, Math.min(99, Number.parseInt(value, 10) || 0));
+    const generation = ++needSaveGenRef.current;
+
     updateShiftNeeds(
       shiftNeeds.map((day, index) =>
         index === dayIndex ? { ...day, [shiftId]: parsed } : day
       )
-    );
-    flashSaved();
+    ).then((result) => {
+      window.clearTimeout(needSaveTimerRef.current);
+      needSaveTimerRef.current = window.setTimeout(() => {
+        if (generation !== needSaveGenRef.current) return;
+        notifySave(result, "Necessidades salvas.", "Não foi possível salvar as necessidades.");
+      }, 600);
+    });
   }
 
   function handleResetNeeds() {
-    resetShiftNeeds();
-    flashSaved();
+    persist(resetShiftNeeds, "Necessidades restauradas.", "Não foi possível restaurar as necessidades.");
   }
 
   function handleAddHoliday() {
@@ -79,20 +94,69 @@ export default function SettingsPage({
       setHolidayError("Esta data já está cadastrada.");
       return;
     }
-    addHoliday(newHoliday);
-    setNewHoliday("");
-    setHolidayError("");
-    flashSaved();
+    persist(
+      () => addHoliday(newHoliday),
+      "Feriado adicionado.",
+      "Não foi possível salvar o feriado."
+    ).then((result) => {
+      if (result?.ok) {
+        setNewHoliday("");
+        setHolidayError("");
+      }
+    });
   }
 
   function handleRemoveHoliday(dateISO) {
-    removeHoliday(dateISO);
-    flashSaved();
+    persist(
+      () => removeHoliday(dateISO),
+      "Feriado removido.",
+      "Não foi possível remover o feriado."
+    );
   }
 
-  function handleReset() {
-    resetShiftTimes();
-    flashSaved();
+  function handleResetShifts() {
+    persist(resetShifts, "Turnos padrão restaurados.", "Não foi possível restaurar os turnos.");
+  }
+
+  function openCreateShift() {
+    setShiftModal({ mode: "create" });
+  }
+
+  function openEditShift(shift) {
+    setShiftModal({
+      mode: "edit",
+      shift: {
+        id: shift.id,
+        label: shift.label,
+        start: shift.start,
+        end: shift.end,
+        scope: shift.scope,
+      },
+    });
+  }
+
+  function handleSaveShift(data) {
+    const action =
+      shiftModal?.mode === "edit"
+        ? () => updateShift(shiftModal.shift.id, data)
+        : () => addShift(data);
+    const successMessage =
+      shiftModal?.mode === "edit" ? "Turno atualizado." : "Turno adicionado.";
+
+    persist(action, successMessage, "Não foi possível salvar o turno.").then((result) => {
+      if (result?.ok) setShiftModal(null);
+    });
+  }
+
+  function confirmDeleteShift() {
+    if (!deleteTarget) return;
+    persist(
+      () => removeShift(deleteTarget.id),
+      "Turno excluído.",
+      "Não foi possível excluir o turno."
+    ).then((result) => {
+      if (result?.ok) setDeleteTarget(null);
+    });
   }
 
   async function handleFileSelected(event) {
@@ -118,23 +182,25 @@ export default function SettingsPage({
     setImportError("");
 
     try {
-      await importBackup(pendingFile);
-      setPendingFile(null);
-      setPendingPreview(null);
-      flashSaved();
+      const result = await importBackup(pendingFile);
+      if (result?.ok) {
+        setPendingFile(null);
+        setPendingPreview(null);
+        notifySave(result, "Backup importado com sucesso.", "Não foi possível importar o backup.");
+      } else {
+        setImportError(result?.error || "Não foi possível importar o backup.");
+        notifySave(result, "Backup importado com sucesso.", "Não foi possível importar o backup.");
+      }
     } catch (err) {
-      setImportError(err?.message || "Não foi possível importar o backup.");
+      const message = err?.message || "Não foi possível importar o backup.";
+      setImportError(message);
+      notifySave({ ok: false, error: message }, "Backup importado com sucesso.", message);
     } finally {
       setImporting(false);
     }
   }
 
-  const isDefault = SHIFT_IDS.every(
-    (id) =>
-      shiftTimes[id].start === DEFAULT_SHIFT_TIMES[id].start &&
-      shiftTimes[id].end === DEFAULT_SHIFT_TIMES[id].end
-  );
-  const isNeedsDefault = isDefaultShiftNeeds(shiftNeeds);
+  const isNeedsDefault = isDefaultShiftNeeds(shiftNeeds, shiftsConfig);
 
   const groupedHolidays = useMemo(() => {
     const todayISO = toISODate(new Date());
@@ -148,21 +214,17 @@ export default function SettingsPage({
     { label: "Feriado", dayIndex: FERIADO_DAY_INDEX },
   ];
 
+  const deleteUsageCount = deleteTarget ? countRulesUsingShift(rules, deleteTarget.id) : 0;
+
   return (
     <PageContainer size="narrow">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-semibold text-ink">Configurações</h1>
           <p className="mt-0.5 text-[14px] text-ink-soft">
-            Horários dos turnos, necessidade de pessoas, backup e restauração dos dados salvos neste
-            dispositivo.
+            Turnos, necessidade de pessoas, backup e restauração dos dados salvos neste dispositivo.
           </p>
         </div>
-        {saved && (
-          <span className="rounded-full bg-good/15 px-3 py-1 text-[12px] font-medium text-good">
-            Salvo
-          </span>
-        )}
       </div>
 
       <Card className="mb-5 px-5 py-5">
@@ -173,8 +235,8 @@ export default function SettingsPage({
           <div>
             <h2 className="text-[15px] font-semibold text-ink">Backup dos dados</h2>
             <p className="mt-0.5 text-[13px] text-ink-soft">
-              Exporte ou importe um arquivo JSON com equipe, escalas, horários, feriados e
-              necessidade por turno.
+              Exporte ou importe um arquivo JSON com equipe, escalas, turnos, feriados e necessidade
+              por turno.
             </p>
           </div>
         </div>
@@ -188,8 +250,11 @@ export default function SettingsPage({
             ,{" "}
             <span className="font-medium text-ink">
               {summary.rules} escala{summary.rules !== 1 ? "s" : ""}
-            </span>{" "}
-            e horários personalizados
+            </span>
+            ,{" "}
+            <span className="font-medium text-ink">
+              {summary.shifts} turno{summary.shifts !== 1 ? "s" : ""}
+            </span>
             {holidays.length > 0 && (
               <>
                 ,{" "}
@@ -220,9 +285,7 @@ export default function SettingsPage({
           />
         </div>
 
-        {importError && (
-          <p className="mt-3 text-[13px] text-bad">{importError}</p>
-        )}
+        {importError && <p className="mt-3 text-[13px] text-bad">{importError}</p>}
 
         <p className="mt-4 text-[12px] text-ink-faint">
           O arquivo baixado terá o nome{" "}
@@ -231,49 +294,46 @@ export default function SettingsPage({
         </p>
       </Card>
 
-      <h2 className="mb-3 text-[15px] font-semibold text-ink">Horários dos turnos</h2>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-ink">Turnos</h2>
+        <Button onClick={openCreateShift}>
+          <Plus className="h-4 w-4" />
+          Adicionar turno
+        </Button>
+      </div>
 
       <Card className="divide-y divide-border-soft">
-        {shifts.map((shift) => {
-          const Icon = shift.icon;
-          const slot = shiftTimes[shift.id];
-
-          return (
+        {shifts.length === 0 ? (
+          <div className="px-5 py-8 text-center text-[13px] text-ink-faint">
+            Nenhum turno cadastrado. Adicione o primeiro turno para começar.
+          </div>
+        ) : (
+          shifts.map((shift) => (
             <div key={shift.id} className="px-5 py-4">
-              <div className="mb-4 flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-xl"
-                  style={{ background: shift.soft, color: shift.color }}
-                >
-                  <Icon className="h-5 w-5" strokeWidth={2.25} />
-                </div>
-                <div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <p className="text-[15px] font-medium text-ink">{shift.label}</p>
-                  <p className="text-[12px] text-ink-faint">{shift.time}</p>
+                  <p className="text-[12px] text-ink-faint">
+                    {shift.time} · {shift.scopeLabel}
+                  </p>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Início">
-                  <input
-                    type="time"
-                    className={inputClass}
-                    value={slot.start}
-                    onChange={(e) => handleChange(shift.id, "start", e.target.value)}
-                  />
-                </Field>
-                <Field label="Fim">
-                  <input
-                    type="time"
-                    className={inputClass}
-                    value={slot.end}
-                    onChange={(e) => handleChange(shift.id, "end", e.target.value)}
-                  />
-                </Field>
+                <div className="flex shrink-0 items-center gap-1">
+                  <IconButton onClick={() => openEditShift(shift)} aria-label={`Editar ${shift.label}`}>
+                    <Pencil className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    variant="danger"
+                    onClick={() => setDeleteTarget(shift)}
+                    disabled={shifts.length <= 1}
+                    aria-label={`Excluir ${shift.label}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </IconButton>
+                </div>
               </div>
             </div>
-          );
-        })}
+          ))
+        )}
       </Card>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -281,9 +341,9 @@ export default function SettingsPage({
           <Settings2 className="h-3.5 w-3.5" />
           As alterações são salvas automaticamente neste dispositivo.
         </p>
-        <Button variant="secondary" onClick={handleReset} disabled={isDefault}>
+        <Button variant="secondary" onClick={handleResetShifts} disabled={isDefaultShifts}>
           <RotateCcw className="h-4 w-4" />
-          Restaurar horários padrão
+          Restaurar turnos padrão
         </Button>
       </div>
 
@@ -294,8 +354,8 @@ export default function SettingsPage({
         <div>
           <h2 className="text-[15px] font-semibold text-ink">Feriados</h2>
           <p className="mt-0.5 text-[13px] text-ink-soft">
-            Escalas semanais não se aplicam nessas datas. No calendário mensal, a meta de pessoas
-            usa a linha Feriado da tabela abaixo.
+            Escalas semanais não se aplicam nessas datas. No calendário mensal, a meta de pessoas usa
+            a linha Feriado da tabela abaixo.
           </p>
         </div>
       </div>
@@ -352,8 +412,7 @@ export default function SettingsPage({
         <div>
           <h2 className="text-[15px] font-semibold text-ink">Necessidade por turno</h2>
           <p className="mt-0.5 text-[13px] text-ink-soft">
-            Segunda a sexta: meta em Manhã, Tarde e Noite. Fim de semana e linha Feriado: meta em
-            FDS/Feriado.
+            Defina quantas pessoas são necessárias em cada turno, por dia da semana e feriados.
           </p>
         </div>
       </div>
@@ -366,23 +425,19 @@ export default function SettingsPage({
                 <th className="pb-3 pr-3 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
                   Dia
                 </th>
-                {shifts.map((shift) => {
-                  const Icon = shift.icon;
-                  return (
-                    <th
-                      key={shift.id}
-                      className="px-2 pb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-ink-faint"
+                {shifts.map((shift) => (
+                  <th
+                    key={shift.id}
+                    className="px-2 pb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-ink-faint"
+                  >
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium normal-case tracking-normal"
+                      style={{ background: shift.soft, color: shift.color }}
                     >
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium normal-case tracking-normal"
-                        style={{ background: shift.soft, color: shift.color }}
-                      >
-                        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-                        {shift.label}
-                      </span>
-                    </th>
-                  );
-                })}
+                      {shift.label}
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -390,8 +445,8 @@ export default function SettingsPage({
                 <tr key={label} className="border-b border-border-soft last:border-b-0">
                   <td className="py-2.5 pr-3 font-medium text-ink">{label}</td>
                   {shifts.map((shift) => {
-                    const editable = isShiftNeedEditable(dayIndex, shift.id);
-                    const disabledReason = shiftNeedDisabledReason(dayIndex, shift.id);
+                    const editable = isShiftNeedEditable(dayIndex, shift.id, shiftsById);
+                    const disabledReason = shiftNeedDisabledReason(dayIndex, shift.id, shiftsById);
                     return (
                       <td key={shift.id} className="px-2 py-2.5 text-center">
                         {editable ? (
@@ -432,6 +487,39 @@ export default function SettingsPage({
         </Button>
       </div>
 
+      <ShiftModal
+        open={!!shiftModal}
+        initial={shiftModal?.mode === "edit" ? shiftModal.shift : null}
+        onClose={() => setShiftModal(null)}
+        onSave={handleSaveShift}
+      />
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Excluir turno"
+      >
+        <p className="text-[14px] text-ink-soft">
+          Tem certeza que deseja excluir o turno{" "}
+          <span className="font-medium text-ink">{deleteTarget?.label}</span>?
+        </p>
+        {deleteUsageCount > 0 && (
+          <p className="mt-3 text-[13px] text-bad">
+            {deleteUsageCount} escala{deleteUsageCount !== 1 ? "s" : ""} usa
+            {deleteUsageCount !== 1 ? "m" : ""} este turno e será
+            {deleteUsageCount !== 1 ? "ão" : ""} atualizada{deleteUsageCount !== 1 ? "s" : ""}.
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={confirmDeleteShift}>
+            Excluir turno
+          </Button>
+        </div>
+      </Modal>
+
       <Modal
         open={!!pendingFile}
         onClose={() => {
@@ -442,8 +530,8 @@ export default function SettingsPage({
         title="Importar backup"
       >
         <p className="text-[14px] text-ink-soft">
-          Isso substituirá todos os dados atuais neste dispositivo: equipe, escalas, horários dos
-          turnos, feriados e necessidade por turno.
+          Isso substituirá todos os dados atuais neste dispositivo: equipe, escalas, turnos,
+          feriados e necessidade por turno.
         </p>
         {pendingPreview && (
           <div className="mt-3 rounded-xl bg-surface-2 px-4 py-3 text-[13px] text-ink-soft">
@@ -455,7 +543,11 @@ export default function SettingsPage({
             <span className="font-medium text-ink">
               {pendingPreview.rules} escala{pendingPreview.rules !== 1 ? "s" : ""}
             </span>{" "}
-            e horários dos turnos.
+            e{" "}
+            <span className="font-medium text-ink">
+              {pendingPreview.shifts} turno{pendingPreview.shifts !== 1 ? "s" : ""}
+            </span>
+            .
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">

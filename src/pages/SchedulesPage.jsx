@@ -10,22 +10,20 @@ import {
   PersonAvatar,
 } from "../components/ui";
 import { ShiftBadge } from "../components/ui";
-import RuleModal, { emptyRule } from "../components/RuleModal";
-import { WEEKDAY_LABELS, WEEKDAY_LABELS_FULL, MONTH_LABELS } from "../lib/constants";
-import { useShifts } from "../context/ShiftsContext";
-import { describeRecurrence, partitionRulesByStatus, toISODate } from "../lib/schedule";
+import RuleModal from "../components/RuleModal";
+import { WEEKDAY_LABELS_FULL, MONTH_LABELS } from "../lib/constants";
+import { useShifts } from "../hooks/useShifts";
+import { describeRecurrence, partitionRulesByStatus } from "../lib/schedule";
 import { colorForPerson } from "../lib/constants";
 import { sortShiftIds } from "../lib/shifts";
+import { validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
+import { usePersist } from "../hooks/usePersist";
 import PageContainer from "../components/PageContainer";
 
 const RECURRENCE_TYPES = [
   { id: "specific_date", label: "Dia específico" },
   { id: "weekly", label: "Semanal" },
 ];
-
-function todayISO() {
-  return toISODate(new Date());
-}
 
 const DEFAULT_FILTERS = {
   status: "all",
@@ -55,8 +53,9 @@ function countActiveFilters(filters) {
   return count;
 }
 
-export default function SchedulesPage({ people, rules, addRule, updateRule, removeRule }) {
-  const { shifts } = useShifts();
+export default function SchedulesPage({ people, rules, addRule, updateRule, removeRule, holidays = [] }) {
+  const { shifts, shiftsById } = useShifts();
+  const { persist } = usePersist();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
@@ -106,12 +105,28 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
   }
 
   function handleSave(ruleData) {
-    if (editing) {
-      updateRule(editing.id, ruleData);
-    } else {
-      addRule(ruleData);
+    const payload =
+      ruleData.recurrence?.type === "specific_date"
+        ? { ...ruleData, startDate: "", endDate: "" }
+        : ruleData;
+
+    const validation = validateRuleSingleShiftPerDay(rules, payload, holidays, {
+      excludeRuleId: editing?.id,
+      shiftsById,
+    });
+    if (!validation.ok) {
+      persist(() => Promise.resolve(validation), "", "");
+      return;
     }
-    setModalOpen(false);
+
+    const action = editing
+      ? () => updateRule(editing.id, payload)
+      : () => addRule(payload);
+    const successMessage = editing ? "Escala atualizada." : "Escala criada.";
+
+    persist(action, successMessage, "Não foi possível salvar a escala.").then((result) => {
+      if (result?.ok) setModalOpen(false);
+    });
   }
 
   const noPeople = people.length === 0;
@@ -270,8 +285,13 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
           <Button
             variant="danger"
             onClick={() => {
-              removeRule(confirmDelete.id);
-              setConfirmDelete(null);
+              persist(
+                () => removeRule(confirmDelete.id),
+                "Escala removida.",
+                "Não foi possível remover a escala."
+              ).then((result) => {
+                if (result?.ok) setConfirmDelete(null);
+              });
             }}
           >
             Remover
@@ -441,6 +461,7 @@ function ScheduleFilters({
 }
 
 function RuleListItem({ rule, person, people, expired = false, onEdit, onDelete }) {
+  const { shiftsConfig } = useShifts();
   if (!person) return null;
 
   return (
@@ -463,7 +484,7 @@ function RuleListItem({ rule, person, people, expired = false, onEdit, onDelete 
           {describeRecurrence(rule, WEEKDAY_LABELS_FULL, MONTH_LABELS)}
         </p>
         <div className="mt-1.5 flex flex-wrap gap-1">
-          {sortShiftIds(rule.shifts).map((s) => (
+          {sortShiftIds(rule.shifts, shiftsConfig).map((s) => (
             <ShiftBadge key={s} shiftId={s} size="sm" />
           ))}
         </div>

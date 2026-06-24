@@ -2,29 +2,27 @@ import { useMemo, useRef, useState } from "react";
 import { addDays, startOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, CalendarRange } from "lucide-react";
-import { Card, PersonAvatar, ShiftBadge } from "../components/ui";
+import { Card } from "../components/ui";
 import ExportButton from "../components/ExportButton";
 import ExportFrame from "../components/ExportFrame";
 import ScheduleViewToggle from "../components/ScheduleViewToggle";
 import StaffingLegend from "../components/StaffingLegend";
-import ShiftStaffingCard from "../components/ShiftStaffingCard";
 import ShiftStaffingPeopleModal from "../components/ShiftStaffingPeopleModal";
-import { getOccurrences, toISODate, groupByDate } from "../lib/schedule";
-import { WEEKDAY_LABELS_FULL, colorForPerson, peopleScheduledIn } from "../lib/constants";
-import { getDayStaffingRows } from "../lib/shiftNeeds";
+import WeekScheduleTable from "../components/WeekScheduleTable";
+import { getOccurrences, toISODate, groupByDate, filterOccurrencesByPerson, formatShiftDateLabel } from "../lib/schedule";
 import { SCHEDULE_VIEW, useScheduleViewMode } from "../hooks/useScheduleViewMode";
-import { useShifts } from "../context/ShiftsContext";
-import { useShell } from "../context/ShellContext";
+import { usePersonFilter } from "../hooks/usePersonFilter";
+import { useShifts } from "../hooks/useShifts";
+import PersonFilterSelect from "../components/PersonFilterSelect";
 import PageContainer from "../components/PageContainer";
 
 export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
-  const { shifts } = useShifts();
-  const { sidebarCollapsed } = useShell();
+  const { shifts, shiftsById } = useShifts();
   const [weekOffset, setWeekOffset] = useState(0);
   const [viewMode, setViewMode] = useScheduleViewMode();
+  const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const [staffingModal, setStaffingModal] = useState(null);
   const exportRef = useRef(null);
-  const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
 
   const weekStart = useMemo(() => {
     const base = startOfWeek(new Date(), { weekStartsOn: 0 });
@@ -43,7 +41,12 @@ export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule,
     () => getOccurrences(rules, rangeStart, rangeEnd, holidays),
     [rules, rangeStart, rangeEnd, holidays]
   );
-  const occByDate = useMemo(() => groupByDate(occurrences), [occurrences]);
+  const filteredOccurrences = useMemo(
+    () => filterOccurrencesByPerson(occurrences, personFilterIds),
+    [occurrences, personFilterIds]
+  );
+  const occByDate = useMemo(() => groupByDate(filteredOccurrences), [filteredOccurrences]);
+  const fullOccByDate = useMemo(() => groupByDate(occurrences), [occurrences]);
 
   const todayISO = toISODate(new Date());
   const rangeLabelRaw = `${format(days[0], "dd 'de' MMM", { locale: ptBR })} – ${format(
@@ -55,14 +58,14 @@ export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule,
   const exportSubtitle =
     viewMode === SCHEDULE_VIEW.NEEDS ? "Escala semanal · Necessidade" : "Escala semanal";
 
-  function openStaffingModal(day, row, dayOccurrences) {
+  function openStaffingModal(day, row) {
     const shift = shifts.find((item) => item.id === row.shiftId);
     if (!shift) return;
     setStaffingModal({
       shift,
       required: row.required,
       dateISO: toISODate(day),
-      dateLabel: format(day, "dd/MM/yyyy", { locale: ptBR }),
+      dateLabel: formatShiftDateLabel(day),
     });
   }
 
@@ -101,109 +104,40 @@ export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule,
         </div>
       </div>
 
-      {viewMode === SCHEDULE_VIEW.NEEDS && (
-        <div className="mb-4">
-          <StaffingLegend />
-        </div>
-      )}
+      <div className="mb-4">
+        <StaffingLegend />
+      </div>
 
       {people.length === 0 ? (
         <EmptyState />
       ) : (
-        <ExportFrame innerRef={exportRef} title={rangeLabel} subtitle={exportSubtitle}>
-          <div
-            className={`export-week-grid grid gap-3 ${
-              sidebarCollapsed
-                ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-7"
-                : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-7"
-            }`}
-          >
-            {days.map((day) => {
-              const iso = toISODate(day);
-              const isToday = iso === todayISO;
-              const dayOccurrences = occByDate[iso] || [];
-              const staffingRows = getDayStaffingRows(
-                dayOccurrences,
-                shiftNeeds,
-                iso,
-                shiftIds,
-                holidays
-              );
-
-              return (
-                <Card
-                  key={iso}
-                  className={`flex min-w-0 flex-col px-3.5 py-3.5 ${
-                    isToday ? "border-brand/50 bg-brand-soft" : ""
-                  }`}
-                >
-                  <div className="mb-2.5">
-                    <p
-                      className={`text-[12px] font-medium uppercase tracking-wide ${
-                        isToday ? "text-brand" : "text-ink-faint"
-                      }`}
-                    >
-                      {WEEKDAY_LABELS_FULL[day.getDay()].slice(0, 3)}
-                    </p>
-                    <p className={`text-[18px] font-semibold ${isToday ? "text-brand" : "text-ink"}`}>
-                      {format(day, "dd")}
-                    </p>
-                  </div>
-
-                  {viewMode === SCHEDULE_VIEW.PEOPLE ? (
-                    dayOccurrences.length === 0 ? (
-                      <p className="text-[12px] text-ink-faint">Sem escala</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {shifts.map((shift) => {
-                          const shiftOccs = dayOccurrences.filter((o) => o.shift === shift.id);
-                          if (shiftOccs.length === 0) return null;
-                          return (
-                            <div key={shift.id}>
-                              <ShiftBadge shiftId={shift.id} size="sm" count={shiftOccs.length} />
-                              <div className="mt-1.5 space-y-1">
-                                {peopleScheduledIn(shiftOccs, people).map((person) => (
-                                  <div key={person.id} className="flex items-start gap-1.5">
-                                    <PersonAvatar
-                                      nome={person.nome}
-                                      color={colorForPerson(person.id, people)}
-                                      size={18}
-                                    />
-                                    <span className="text-[12.5px] leading-tight text-ink-soft">
-                                      {person.nome}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )
-                  ) : staffingRows.length === 0 ? (
-                    <p className="text-[12px] text-ink-faint">Sem escala</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {staffingRows.map((row) => {
-                        const shift = shifts.find((item) => item.id === row.shiftId);
-                        if (!shift) return null;
-                        return (
-                          <ShiftStaffingCard
-                            key={row.shiftId}
-                            shift={shift}
-                            required={row.required}
-                            scheduled={row.scheduled}
-                            status={row.status}
-                            onClick={() => openStaffingModal(day, row, dayOccurrences)}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
+        <ExportFrame
+          innerRef={exportRef}
+          title={rangeLabel}
+          subtitle={exportSubtitle}
+          headerExtra={
+            <PersonFilterSelect
+              className="export-skip"
+              people={people}
+              value={personFilterIds}
+              onChange={setPersonFilterIds}
+            />
+          }
+        >
+          <WeekScheduleTable
+            days={days}
+            shifts={shifts}
+            shiftsById={shiftsById}
+            occByDate={occByDate}
+            fullOccByDate={fullOccByDate}
+            shiftNeeds={shiftNeeds}
+            holidays={holidays}
+            people={people}
+            viewMode={viewMode}
+            personFilterIds={personFilterIds}
+            todayISO={todayISO}
+            onOpenStaffing={openStaffingModal}
+          />
         </ExportFrame>
       )}
 
