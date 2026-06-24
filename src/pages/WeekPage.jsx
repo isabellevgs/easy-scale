@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { addDays, startOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, CalendarRange } from "lucide-react";
-import { Card } from "../components/ui";
+import { ChevronLeft, ChevronRight, CalendarRange, CalendarPlus } from "lucide-react";
+import { Button, Card } from "../components/ui";
+import RuleModal from "../components/RuleModal";
 import ExportButton from "../components/ExportButton";
 import ExportFrame from "../components/ExportFrame";
 import ScheduleViewToggle from "../components/ScheduleViewToggle";
@@ -17,6 +18,8 @@ import PersonFilterSelect from "../components/PersonFilterSelect";
 import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
 import { formatMonthPeriodLabels } from "../lib/consistencyRules";
 import PageContainer from "../components/PageContainer";
+import { usePersist } from "../hooks/usePersist";
+import { validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
 
 export default function WeekPage({
   people,
@@ -30,7 +33,9 @@ export default function WeekPage({
   removeRule,
 }) {
   const { shifts, shiftsById } = useShifts();
+  const { persist } = usePersist();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [modalOpen, setModalOpen] = useState(false);
   const [viewMode, setViewMode] = useScheduleViewMode();
   const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const [staffingModal, setStaffingModal] = useState(null);
@@ -78,6 +83,40 @@ export default function WeekPage({
     [monthKeys]
   );
 
+  function openNew() {
+    setModalOpen(true);
+  }
+
+  function handleSave(ruleData) {
+    const payload =
+      ruleData.recurrence?.type === "specific_date" ||
+      ruleData.recurrence?.type === "specific_dates"
+        ? { ...ruleData, startDate: "", endDate: "" }
+        : ruleData.recurrence?.type === "custom"
+          ? {
+              ...ruleData,
+              endDate:
+                ruleData.recurrence.endType === "on_date" ? ruleData.recurrence.endDate : "",
+            }
+          : ruleData;
+
+    const validation = validateRuleSingleShiftPerDay(rules, payload, holidays, {
+      shiftsById,
+    });
+    if (!validation.ok) {
+      persist(() => Promise.resolve(validation), "", "");
+      return;
+    }
+
+    persist(
+      () => addRule(payload),
+      "Escala criada.",
+      "Não foi possível salvar a escala."
+    ).then((result) => {
+      if (result?.ok) setModalOpen(false);
+    });
+  }
+
   function openStaffingModal(day, row) {
     const shift = shifts.find((item) => item.id === row.shiftId);
     if (!shift) return;
@@ -122,6 +161,10 @@ export default function WeekPage({
             title={`Escala semanal · ${rangeLabel}`}
           />
         </div>
+        <Button onClick={openNew} disabled={people.length === 0}>
+          <CalendarPlus className="h-4 w-4" />
+          Nova escala
+        </Button>
       </div>
 
       <div className="mb-4">
@@ -160,6 +203,14 @@ export default function WeekPage({
           />
         </ExportFrame>
       )}
+
+      <RuleModal
+        open={modalOpen}
+        people={people}
+        initial={null}
+        onClose={() => setModalOpen(false)}
+        onSave={handleSave}
+      />
 
       <ShiftStaffingPeopleModal
         open={!!staffingModal}
