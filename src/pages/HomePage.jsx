@@ -6,6 +6,7 @@ import { CalendarRange, CalendarDays, Users, ArrowRight } from "lucide-react";
 import { Card, PersonAvatar } from "../components/ui";
 import { getOccurrences, toISODate } from "../lib/schedule";
 import { colorForPerson, MONTH_LABELS, peopleScheduledIn } from "../lib/constants";
+import { getApplicableShiftIdsForDate } from "../lib/shiftNeeds";
 import { useShifts } from "../context/ShiftsContext";
 import PageContainer from "../components/PageContainer";
 
@@ -20,11 +21,17 @@ export default function HomePage({ people, rules, holidays = [] }) {
   const { shifts } = useShifts();
   const today = useMemo(() => new Date(), []);
   const todayISO = toISODate(today);
+  const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
 
   const todayOccurrences = useMemo(
     () => getOccurrences(rules, todayISO, todayISO, holidays),
     [rules, todayISO, holidays]
   );
+
+  const todayShifts = useMemo(() => {
+    const applicableIds = new Set(getApplicableShiftIdsForDate(todayISO, shiftIds, holidays));
+    return shifts.filter((shift) => applicableIds.has(shift.id));
+  }, [todayISO, shiftIds, holidays, shifts]);
 
   const shiftsByPersonToday = useMemo(() => {
     const map = new Map();
@@ -54,51 +61,52 @@ export default function HomePage({ people, rules, holidays = [] }) {
 
       <Card className="mt-6 overflow-hidden">
         <div className="px-6 py-6">
-          {todayOccurrences.length === 0 ? (
-            <>
-              <h2 className="text-[16px] font-semibold text-ink">Ninguém escalado para hoje</h2>
-              <p className="mt-1 text-[14px] text-ink-soft">
-                Monte escalas semanais e mensais em segundos. Tudo salvo no seu dispositivo,
-                funciona offline.
-              </p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-[16px] font-semibold text-ink">Quem trabalha hoje</h2>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-[13px]">
-                  <thead>
-                    <tr className="border-b border-border-soft">
-                      <th className="pb-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                        Pessoas
-                      </th>
-                      {shifts.map((shift) => {
-                        const Icon = shift.icon;
-                        const count = todayOccurrences.filter((o) => o.shift === shift.id).length;
-                        return (
-                          <th
-                            key={shift.id}
-                            className="px-3 pb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-ink-faint"
-                          >
-                            <div className="flex flex-col items-center gap-1.5">
-                              <span
-                                className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium normal-case tracking-normal"
-                                style={{ background: shift.soft, color: shift.color }}
-                              >
-                                <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
-                                {shift.label}
-                              </span>
-                              <span className="text-[10px] font-normal normal-case text-ink-faint">
-                                {count} pessoa{count !== 1 ? "s" : ""}
-                              </span>
-                            </div>
-                          </th>
-                        );
-                      })}
+          <>
+            <h2 className="text-[16px] font-semibold text-ink">Quem trabalha hoje</h2>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[720px] border-collapse text-[13px]">
+                <thead>
+                  <tr className="border-b border-border-soft">
+                    <th className="pb-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+                      Pessoas
+                    </th>
+                    {todayShifts.map((shift) => {
+                      const Icon = shift.icon;
+                      const count = todayOccurrences.filter((occ) => occ.shift === shift.id).length;
+                      return (
+                        <th
+                          key={shift.id}
+                          className="px-3 pb-3 text-center text-[11px] font-semibold uppercase tracking-wide text-ink-faint"
+                        >
+                          <div className="flex flex-col items-center gap-1.5">
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium normal-case tracking-normal"
+                              style={{ background: shift.soft, color: shift.color }}
+                            >
+                              <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
+                              {shift.label}
+                            </span>
+                            <span className="text-[10px] font-normal normal-case text-ink-faint">
+                              {count} pessoa{count !== 1 ? "s" : ""}
+                            </span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayPeople.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={todayShifts.length + 1}
+                        className="py-4 text-center text-[14px] text-ink-soft"
+                      >
+                        Ninguém escalado ainda
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {todayPeople.map((person) => {
+                  ) : (
+                    todayPeople.map((person) => {
                       const personShifts = shiftsByPersonToday.get(person.id);
                       return (
                         <tr key={person.id} className="border-b border-border-soft last:border-b-0">
@@ -112,7 +120,7 @@ export default function HomePage({ people, rules, holidays = [] }) {
                               <span className="font-medium text-ink">{person.nome}</span>
                             </div>
                           </td>
-                          {shifts.map((shift) => {
+                          {todayShifts.map((shift) => {
                             const active = personShifts?.has(shift.id);
                             return (
                               <td key={shift.id} className="px-3 py-3 text-center">
@@ -135,12 +143,12 @@ export default function HomePage({ people, rules, holidays = [] }) {
                           })}
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
               to="/semana"

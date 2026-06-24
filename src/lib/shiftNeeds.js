@@ -23,6 +23,11 @@ export function isShiftNeedEditable(dayIndex, shiftId) {
   return true;
 }
 
+export function getApplicableShiftIdsForDate(dateISO, shiftIds, holidays = []) {
+  const dayIndex = resolveNeedDayIndex(dateISO, holidays);
+  return shiftIds.filter((shiftId) => isShiftNeedEditable(dayIndex, shiftId));
+}
+
 export function shiftNeedDisabledReason(dayIndex, shiftId) {
   if (isShiftNeedEditable(dayIndex, shiftId)) return "";
   if (REGULAR_SHIFT_IDS.includes(shiftId)) {

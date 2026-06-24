@@ -47,10 +47,10 @@ export default function AppShell({ children }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-base text-ink">
+    <div className="flex h-screen overflow-hidden bg-base text-ink">
       {/* Sidebar - desktop */}
       <aside
-        className={`hidden shrink-0 flex-col border-r border-border-soft bg-surface py-6 transition-[width,padding] duration-200 ease-out md:flex ${
+        className={`hidden h-full shrink-0 flex-col overflow-hidden border-r border-border-soft bg-surface py-6 transition-[width,padding] duration-200 ease-out md:flex ${
           sidebarCollapsed ? "w-18 px-2" : "w-60 px-4"
         }`}
       >
@@ -87,7 +87,7 @@ export default function AppShell({ children }) {
       </aside>
 
       {/* Main content */}
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
         {/* Topbar - mobile */}
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border-soft bg-surface/95 px-4 py-3 backdrop-blur md:hidden">
           <Brand compact />

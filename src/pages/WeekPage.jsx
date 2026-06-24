@@ -17,7 +17,7 @@ import { useShifts } from "../context/ShiftsContext";
 import { useShell } from "../context/ShellContext";
 import PageContainer from "../components/PageContainer";
 
-export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule }) {
+export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
   const { shifts } = useShifts();
   const { sidebarCollapsed } = useShell();
   const [weekOffset, setWeekOffset] = useState(0);
@@ -218,6 +218,8 @@ export default function WeekPage({ people, rules, shiftNeeds, holidays, addRule 
         allPeople={people}
         holidays={holidays}
         addRule={addRule}
+        updateRule={updateRule}
+        removeRule={removeRule}
       />
     </PageContainer>
   );

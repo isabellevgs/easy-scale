@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarPlus, ChevronDown } from "lucide-react";
-import { Modal, PersonAvatar, Button, Field, inputClass } from "./ui";
-import { colorForPerson, peopleScheduledIn, WEEKDAY_LABELS } from "../lib/constants";
+import { CalendarPlus, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { Modal, PersonAvatar, Button, Field, inputClass, IconButton } from "./ui";
+import RuleModal from "./RuleModal";
+import { colorForPerson, peopleScheduledIn, sortPeopleByName, WEEKDAY_LABELS } from "../lib/constants";
 import {
   getStaffingStatus,
   staffingStatusLabel,
@@ -26,12 +27,16 @@ export default function ShiftStaffingPeopleModal({
   allPeople,
   holidays = [],
   addRule,
+  updateRule,
+  removeRule,
 }) {
   const [personId, setPersonId] = useState("");
   const [recurrenceType, setRecurrenceType] = useState("specific_date");
   const [weekdays, setWeekdays] = useState([]);
   const [endDate, setEndDate] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const contextDayOfWeek = useMemo(() => {
     if (!dateISO) return 0;
@@ -49,6 +54,25 @@ export default function ShiftStaffingPeopleModal({
     [shiftOccs, allPeople]
   );
 
+  const scheduledEntries = useMemo(() => {
+    const peopleById = Object.fromEntries(allPeople.map((person) => [person.id, person]));
+    const rulesById = Object.fromEntries(rules.map((rule) => [rule.id, rule]));
+    const seen = new Set();
+
+    return shiftOccs
+      .map((occ) => {
+        const person = peopleById[occ.personId];
+        const rule = rulesById[occ.ruleId];
+        if (!person || !rule || seen.has(rule.id)) return null;
+        seen.add(rule.id);
+        return { person, rule };
+      })
+      .filter(Boolean)
+      .sort((a, b) =>
+        a.person.nome.localeCompare(b.person.nome, "pt-BR", { sensitivity: "base" })
+      );
+  }, [shiftOccs, allPeople, rules]);
+
   const availablePeople = useMemo(
     () => allPeople.filter((person) => !scheduledPeople.some((item) => item.id === person.id)),
     [allPeople, scheduledPeople]
@@ -57,6 +81,8 @@ export default function ShiftStaffingPeopleModal({
   useEffect(() => {
     if (!open) return;
     setAddOpen(false);
+    setEditingRule(null);
+    setConfirmDelete(null);
     setRecurrenceType("specific_date");
     setWeekdays([contextDayOfWeek]);
     setEndDate("");
@@ -116,18 +142,28 @@ export default function ShiftStaffingPeopleModal({
       </div>
 
       <div className="mt-4">
-        {scheduledPeople.length === 0 ? (
+        {scheduledEntries.length === 0 ? (
           <p className="text-[14px] text-ink-faint">Ninguém escalado</p>
         ) : (
           <div className="space-y-2">
-            {scheduledPeople.map((person) => (
-              <div key={person.id} className="flex items-center gap-2.5">
+            {scheduledEntries.map(({ person, rule }) => (
+              <div key={rule.id} className="flex items-center gap-2.5">
                 <PersonAvatar
                   nome={person.nome}
                   color={colorForPerson(person.id, allPeople)}
                   size={26}
                 />
-                <span className="text-[14px] text-ink">{person.nome}</span>
+                <span className="min-w-0 flex-1 truncate text-[14px] text-ink">{person.nome}</span>
+                <IconButton onClick={() => setEditingRule(rule)} aria-label="Editar escala">
+                  <Pencil className="h-4 w-4" />
+                </IconButton>
+                <IconButton
+                  variant="danger"
+                  onClick={() => setConfirmDelete(rule)}
+                  aria-label="Remover escala"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </IconButton>
               </div>
             ))}
           </div>
@@ -264,6 +300,35 @@ export default function ShiftStaffingPeopleModal({
           </div>
         )}
       </div>
+
+      <RuleModal
+        open={!!editingRule}
+        people={sortPeopleByName(allPeople)}
+        initial={editingRule}
+        onClose={() => setEditingRule(null)}
+        onSave={(ruleData) => {
+          updateRule(editingRule.id, ruleData);
+          setEditingRule(null);
+        }}
+      />
+
+      <Modal open={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Remover escala">
+        <p className="text-[14px] text-ink-soft">Tem certeza que deseja remover esta regra de escala?</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              removeRule(confirmDelete.id);
+              setConfirmDelete(null);
+            }}
+          >
+            Remover
+          </Button>
+        </div>
+      </Modal>
     </Modal>
   );
 }

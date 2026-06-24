@@ -51,6 +51,8 @@ export default function App() {
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
                   addRule={data.addRule}
+                  updateRule={data.updateRule}
+                  removeRule={data.removeRule}
                 />
               }
             />
@@ -63,6 +65,8 @@ export default function App() {
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
                   addRule={data.addRule}
+                  updateRule={data.updateRule}
+                  removeRule={data.removeRule}
                 />
               }
             />

@@ -23,7 +23,7 @@ import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
 import { useShifts } from "../context/ShiftsContext";
 import PageContainer from "../components/PageContainer";
 
-export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule }) {
+export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule, updateRule, removeRule }) {
   const { shifts } = useShifts();
   const [monthOffset, setMonthOffset] = useState(0);
   const [selectedDay, setSelectedDay] = useState(null);
@@ -271,6 +271,8 @@ export default function MonthPage({ people, rules, shiftNeeds, holidays, addRule
         allPeople={people}
         holidays={holidays}
         addRule={addRule}
+        updateRule={updateRule}
+        removeRule={removeRule}
       />
     </PageContainer>
   );
