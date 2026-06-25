@@ -8,8 +8,10 @@ import {
   getStaffingStatus,
   staffingStatusLabel,
   staffingStatusStyles,
+  countScheduledPeopleForShift,
 } from "../lib/shiftNeeds";
-import { getOccurrences } from "../lib/schedule";
+import { getOccurrences, describePersonScaleOverlap } from "../lib/schedule";
+import PersonScaleOverlapIcon from "./PersonScaleOverlapIcon";
 import { isPersonShiftRecurring, togglePersonShiftOnDate } from "../lib/scheduleToggle";
 import { requiresSingleShiftPerPerson } from "../lib/scheduleValidation";
 import { usePersist } from "../hooks/usePersist";
@@ -66,7 +68,7 @@ export default function ShiftStaffingPeopleModal({
   if (!shift) return null;
 
   const enforceSingleShift = requiresSingleShiftPerPerson(dateISO, holidays);
-  const scheduled = shiftOccs.length;
+  const scheduled = countScheduledPeopleForShift(dayOccurrences, shift.id);
   const status = getStaffingStatus(required, scheduled);
   const styles = staffingStatusStyles(status);
   const detail = staffingStatusLabel(status, required, scheduled);
@@ -123,6 +125,9 @@ export default function ShiftStaffingPeopleModal({
               const showOtherShiftWarning =
                 enforceSingleShift && !selected && Boolean(otherShiftLabel);
               const personColor = colorForPerson(person.id, allPeople);
+              const overlapLabel = describePersonScaleOverlap(shiftOccs, person.id);
+              const hasScaleOverlap = Boolean(overlapLabel);
+
               const recurring =
                 selected &&
                 isPersonShiftRecurring(
@@ -134,7 +139,7 @@ export default function ShiftStaffingPeopleModal({
               return (
                 <div
                   key={person.id}
-                  className={`relative rounded-xl border transition-colors ${
+                  className={`relative flex items-stretch rounded-xl border transition-colors ${
                     selected
                       ? "border-brand/40 bg-brand-soft/25"
                       : "border-border-soft"
@@ -143,8 +148,10 @@ export default function ShiftStaffingPeopleModal({
                   <button
                     type="button"
                     onClick={() => handleToggle(person.id)}
-                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                      selected ? "pr-11 hover:bg-brand-soft/35" : "hover:bg-surface-2"
+                    className={`flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                      selected ? "pr-2 hover:bg-brand-soft/35" : "hover:bg-surface-2"
+                    } ${selected && !hasScaleOverlap ? "pr-11" : ""} ${
+                      selected && hasScaleOverlap ? "pr-1" : ""
                     }`}
                     aria-pressed={selected}
                   >
@@ -169,9 +176,15 @@ export default function ShiftStaffingPeopleModal({
                     )}
                   </button>
 
+                  {hasScaleOverlap && (
+                    <div className="flex shrink-0 items-center pr-1">
+                      <PersonScaleOverlapIcon title={overlapLabel} />
+                    </div>
+                  )}
+
                   {selected && (
                     <IconButton
-                      className={`absolute right-1 top-1/2 z-10 -translate-y-1/2 ${
+                      className={`my-auto mr-1 shrink-0 ${
                         recurring ? "text-brand hover:text-brand" : ""
                       }`}
                       onClick={() => setRecurrencePerson(person)}

@@ -122,9 +122,18 @@ export function getStaffingStatus(required, scheduled) {
   return STAFFING_STATUS.OK;
 }
 
+/** Pessoas distintas no turno — regular + hora extra no mesmo dia conta uma vez. */
+export function countScheduledPeopleForShift(dayOccurrences, shiftId) {
+  const personIds = new Set();
+  for (const occ of dayOccurrences) {
+    if (occ.shift === shiftId) personIds.add(occ.personId);
+  }
+  return personIds.size;
+}
+
 export function getShiftStaffing(dayOccurrences, shiftId, shiftNeeds, dayIndex, shiftsById = {}) {
   const required = getShiftNeed(shiftNeeds, dayIndex, shiftId, shiftsById);
-  const scheduled = dayOccurrences.filter((occ) => occ.shift === shiftId).length;
+  const scheduled = countScheduledPeopleForShift(dayOccurrences, shiftId);
   const status = getStaffingStatus(required, scheduled);
 
   return { required, scheduled, status };

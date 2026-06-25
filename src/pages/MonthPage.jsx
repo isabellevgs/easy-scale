@@ -18,9 +18,10 @@ import ShiftStaffingCard from "../components/ShiftStaffingCard";
 import ShiftStaffingPeopleModal from "../components/ShiftStaffingPeopleModal";
 import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
 import { formatMonthPeriodLabel } from "../lib/consistencyRules";
-import { getOccurrences, toISODate, groupByDate, formatShiftDateLabel } from "../lib/schedule";
+import { getOccurrences, toISODate, groupByDate, formatShiftDateLabel, describePersonScaleOverlap } from "../lib/schedule";
 import { WEEKDAY_LABELS, MONTH_LABELS, colorForPerson, peopleScheduledIn } from "../lib/constants";
-import { getDayStaffingRows } from "../lib/shiftNeeds";
+import { getDayStaffingRows, countScheduledPeopleForShift } from "../lib/shiftNeeds";
+import PersonScaleOverlapIcon from "../components/PersonScaleOverlapIcon";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
 import { useShifts } from "../hooks/useShifts";
 import PageContainer from "../components/PageContainer";
@@ -243,18 +244,26 @@ export default function MonthPage({
                   if (shiftOccs.length === 0) return null;
                   return (
                     <div key={shift.id}>
-                      <ShiftBadge shiftId={shift.id} size="sm" count={shiftOccs.length} />
+                      <ShiftBadge
+                        shiftId={shift.id}
+                        size="sm"
+                        count={countScheduledPeopleForShift(selectedOccurrences, shift.id)}
+                      />
                       <div className="mt-2 space-y-1.5">
-                        {peopleScheduledIn(shiftOccs, people).map((person) => (
+                        {peopleScheduledIn(shiftOccs, people).map((person) => {
+                          const overlapLabel = describePersonScaleOverlap(shiftOccs, person.id);
+                          return (
                           <div key={person.id} className="flex items-center gap-2">
                             <PersonAvatar
                               nome={person.nome}
                               color={colorForPerson(person.id, people)}
                               size={22}
                             />
+                            {overlapLabel && <PersonScaleOverlapIcon title={overlapLabel} />}
                             <span className="text-[14px] text-ink-soft">{person.nome}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   );

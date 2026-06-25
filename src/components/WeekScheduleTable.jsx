@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card } from "./ui";
-import { toISODate } from "../lib/schedule";
+import { toISODate, describePersonScaleOverlap } from "../lib/schedule";
 import {
   WEEKDAY_LABELS,
   WEEKDAY_LABELS_FULL,
@@ -17,6 +17,7 @@ import {
   STAFFING_STATUS,
 } from "../lib/shiftNeeds";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
+import PersonScaleOverlapIcon from "./PersonScaleOverlapIcon";
 
 function cellStatusForRow(row) {
   return row.required > 0 ? row.status : STAFFING_STATUS.NONE;
@@ -160,11 +161,12 @@ function chipTextColor(hex) {
   return luminance > 0.62 ? "#0c0d10" : "#ffffff";
 }
 
-function PeopleList({ scheduled, people }) {
+function PeopleList({ scheduled, people, shiftOccs }) {
   return (
     <div className="flex w-full flex-col gap-1 px-2 py-2.5">
       {scheduled.map((person) => {
         const color = colorForPerson(person.id, people);
+        const overlapLabel = describePersonScaleOverlap(shiftOccs, person.id);
         return (
           <span
             key={person.id}
@@ -172,7 +174,15 @@ function PeopleList({ scheduled, people }) {
             style={{ backgroundColor: color, color: chipTextColor(color) }}
             title={person.nome}
           >
-            {person.nome}
+            <span className="inline-flex items-center gap-1">
+              {overlapLabel && (
+                <PersonScaleOverlapIcon
+                  title={overlapLabel}
+                  className="h-3 w-3 shrink-0 text-amber-300 drop-shadow-sm"
+                />
+              )}
+              {person.nome}
+            </span>
           </span>
         );
       })}
@@ -187,20 +197,20 @@ function PeopleCell({ dayOccurrences, shift, people, onClick, personFilterIds })
 
   return (
     <div className="relative h-full min-h-[52px] w-full">
-      {!isEmpty && (
-        <div className="pointer-events-none">
-          <PeopleList scheduled={scheduled} people={people} />
-        </div>
-      )}
       <button
         type="button"
         onClick={onClick}
-        className={`absolute inset-0 z-10 flex w-full bg-transparent transition-[filter] hover:brightness-110 ${
+        className={`absolute inset-0 z-0 flex w-full bg-transparent transition-[filter] hover:brightness-110 ${
           isEmpty ? "items-center justify-center" : "flex-col items-stretch text-left"
         }`}
       >
         {isEmpty ? <span className="text-[11px] text-ink-faint">Sem escala</span> : null}
       </button>
+      {!isEmpty && (
+        <div className="relative z-10 pointer-events-none">
+          <PeopleList scheduled={scheduled} people={people} shiftOccs={shiftOccs} />
+        </div>
+      )}
     </div>
   );
 }

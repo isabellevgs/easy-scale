@@ -33,11 +33,23 @@ export function schedulePersonOnShiftDate({
   shiftId,
   dateISO,
   holidays,
-  shiftsById: _shiftsById,
+  shiftsById,
 }) {
   if (isPersonScheduledOnShiftDate(rules, { personId, shiftId, dateISO }, holidays)) {
     return Promise.resolve({ ok: true });
   }
+
+  const candidateRule = {
+    personId,
+    shifts: [shiftId],
+    scaleType: normalizeScaleType(),
+    recurrence: { type: "specific_date", date: dateISO },
+    startDate: "",
+    endDate: "",
+  };
+
+  const validation = validateRuleSingleShiftPerDay(rules, candidateRule, holidays, { shiftsById });
+  if (!validation.ok) return Promise.resolve(validation);
 
   return addRule({
     personId,

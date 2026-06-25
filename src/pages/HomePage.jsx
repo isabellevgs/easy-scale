@@ -8,7 +8,7 @@ import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
 import { formatMonthPeriodLabel } from "../lib/consistencyRules";
 import { getOccurrences, toISODate } from "../lib/schedule";
 import { colorForPerson, MONTH_LABELS, peopleScheduledIn } from "../lib/constants";
-import { getApplicableShiftIdsForDate } from "../lib/shiftNeeds";
+import { getApplicableShiftIdsForDate, countScheduledPeopleForShift } from "../lib/shiftNeeds";
 import { useShifts } from "../hooks/useShifts";
 import PageContainer from "../components/PageContainer";
 
@@ -87,7 +87,7 @@ export default function HomePage({
                       Pessoas
                     </th>
                     {todayShifts.map((shift) => {
-                      const count = todayOccurrences.filter((occ) => occ.shift === shift.id).length;
+                      const count = countScheduledPeopleForShift(todayOccurrences, shift.id);
                       return (
                         <th
                           key={shift.id}

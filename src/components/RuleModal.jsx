@@ -62,8 +62,26 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
 
   function toggleShift(shiftId) {
     setForm((f) => {
-      const isOnlySelected = f.shifts.length === 1 && f.shifts[0] === shiftId;
-      return { ...f, shifts: isOnlySelected ? [] : [shiftId] };
+      const shift = shifts.find((item) => item.id === shiftId);
+      const isWeekendShift = shift?.scope === "weekend";
+      const current = f.shifts;
+
+      if (isWeekendShift) {
+        const next = current.includes(shiftId)
+          ? current.filter((id) => id !== shiftId)
+          : [...current, shiftId];
+        return { ...f, shifts: next };
+      }
+
+      const isOnlySelected = current.length === 1 && current[0] === shiftId;
+      if (isOnlySelected) {
+        return { ...f, shifts: current.filter((id) => id !== shiftId) };
+      }
+
+      const weekendIds = current.filter(
+        (id) => shifts.find((item) => item.id === id)?.scope === "weekend"
+      );
+      return { ...f, shifts: [...weekendIds, shiftId] };
     });
   }
 
@@ -161,7 +179,7 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
             hint={
               isOvertime
                 ? "Hora extra pode coexistir com outro turno regular no mesmo dia útil."
-                : "Em dias úteis (seg–sex), uma pessoa só pode ter um turno regular por dia."
+                : "Turnos de seg–sex: um por escala. Sábado, domingo e feriados: pode selecionar mais de um."
             }
           >
             <div className="grid grid-cols-3 gap-2">

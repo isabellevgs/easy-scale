@@ -7,7 +7,7 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { WEEKDAY_LABELS_FULL } from "./constants";
-import { normalizeScaleType, SCALE_TYPES } from "./rules";
+import { normalizeScaleType, SCALE_TYPES, describeScaleType } from "./rules";
 import {
   describeCustomRecurrence,
   expandCustomRuleDates,
@@ -118,6 +118,40 @@ function expandRuleDates(rule, rangeStartISO, rangeEndISO, holidays = []) {
 
 export function isRegularOccurrence(occ) {
   return normalizeScaleType(occ?.scaleType) === SCALE_TYPES.REGULAR;
+}
+
+/** Regular e hora extra (ou tipos distintos) no mesmo turno e dia. */
+export function personHasOverlappingScalesOnShift(shiftOccurrences, personId) {
+  const matches = (shiftOccurrences || []).filter((occ) => occ.personId === personId);
+  if (matches.length <= 1) return false;
+  const scaleTypes = new Set(matches.map((occ) => normalizeScaleType(occ.scaleType)));
+  return scaleTypes.size > 1;
+}
+
+const SCALE_TYPE_ORDER = {
+  [SCALE_TYPES.REGULAR]: 0,
+  [SCALE_TYPES.OVERTIME]: 1,
+};
+
+/** Rótulos das escalas distintas da pessoa no turno (ex.: ["Regular", "Hora extra"]). */
+export function getPersonOverlappingScaleLabels(shiftOccurrences, personId) {
+  const matches = (shiftOccurrences || []).filter((occ) => occ.personId === personId);
+  if (matches.length <= 1) return [];
+
+  const scaleTypes = [...new Set(matches.map((occ) => normalizeScaleType(occ.scaleType)))];
+  if (scaleTypes.length <= 1) return [];
+
+  scaleTypes.sort((a, b) => SCALE_TYPE_ORDER[a] - SCALE_TYPE_ORDER[b]);
+  return scaleTypes.map(describeScaleType);
+}
+
+/** Texto para tooltip — ex.: "Regular e Hora extra". */
+export function describePersonScaleOverlap(shiftOccurrences, personId) {
+  const labels = getPersonOverlappingScaleLabels(shiftOccurrences, personId);
+  if (labels.length === 0) return null;
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return `${labels[0]} e ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")} e ${labels[labels.length - 1]}`;
 }
 
 /**
