@@ -8,6 +8,10 @@ import {
   normalizeHexColor,
   personColorError,
   isValidPersonColor,
+  DEFAULT_PERSON_INTERVAL_MINUTES,
+  intervalPartsToMinutes,
+  minutesToIntervalParts,
+  normalizePersonIntervalMinutes,
 } from "../lib/constants";
 import { usePersist } from "../hooks/usePersist";
 import PageContainer from "../components/PageContainer";
@@ -28,13 +32,14 @@ export default function TeamPage({ people, rules, addPerson, updatePerson, remov
     setModalOpen(true);
   }
 
-  function handleSave({ nome, cargo, color }) {
+  function handleSave({ nome, cargo, color, intervalMinutes }) {
     if (!nome.trim()) return;
 
     const patch = { nome: nome.trim() };
     const cargoTrim = cargo?.trim();
     patch.cargo = cargoTrim || undefined;
     patch.color = isValidPersonColor(color) ? normalizeHexColor(color) : undefined;
+    patch.intervalMinutes = normalizePersonIntervalMinutes(intervalMinutes);
 
     const action = editing
       ? () => updatePerson(editing.id, patch)
@@ -148,6 +153,8 @@ function resolveInitialHex(person) {
 function PersonModal({ open, person, people, title, onClose, onSave }) {
   const [nome, setNome] = useState("");
   const [cargo, setCargo] = useState("");
+  const [intervalHours, setIntervalHours] = useState(1);
+  const [intervalMinutesPart, setIntervalMinutesPart] = useState(12);
   const [hexInput, setHexInput] = useState("");
   const [colorError, setColorError] = useState("");
 
@@ -155,6 +162,11 @@ function PersonModal({ open, person, people, title, onClose, onSave }) {
     if (!open) return;
     setNome(person?.nome ?? "");
     setCargo(person?.cargo ?? "");
+    const { hours, minutes } = minutesToIntervalParts(
+      person?.intervalMinutes ?? DEFAULT_PERSON_INTERVAL_MINUTES
+    );
+    setIntervalHours(hours);
+    setIntervalMinutesPart(minutes);
     setHexInput(resolveInitialHex(person));
     setColorError("");
   }, [person, open]);
@@ -204,7 +216,12 @@ function PersonModal({ open, person, people, title, onClose, onSave }) {
             setColorError("Informe um código hex válido (ex.: #a855f7).");
             return;
           }
-          onSave({ nome, cargo, color: hex });
+          onSave({
+            nome,
+            cargo,
+            color: hex,
+            intervalMinutes: intervalPartsToMinutes(intervalHours, intervalMinutesPart),
+          });
         }}
       >
         <div className="mb-4 flex items-center gap-3">
@@ -229,6 +246,33 @@ function PersonModal({ open, person, people, title, onClose, onSave }) {
             onChange={(e) => setCargo(e.target.value)}
             //placeholder="Ex.: Enfermeira, Técnico..."
           />
+        </Field>
+
+        <Field label="Intervalo" hint="Duração do intervalo de descanso">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-[12px] text-ink-faint">Horas</label>
+              <input
+                type="number"
+                min={0}
+                max={23}
+                className={inputClass}
+                value={intervalHours}
+                onChange={(e) => setIntervalHours(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] text-ink-faint">Minutos</label>
+              <input
+                type="number"
+                min={0}
+                max={59}
+                className={inputClass}
+                value={intervalMinutesPart}
+                onChange={(e) => setIntervalMinutesPart(e.target.value)}
+              />
+            </div>
+          </div>
         </Field>
 
         <Field label="Cor">

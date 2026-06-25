@@ -118,9 +118,7 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
           const payload =
             rec.type === "specific_date" || rec.type === "specific_dates"
               ? { ...form, scaleType, startDate: "", endDate: "" }
-              : rec.type === "weekly"
-                ? { ...form, scaleType, startDate: "" }
-                : rec.type === "custom"
+              : rec.type === "custom"
                   ? {
                       ...form,
                       scaleType,
@@ -315,14 +313,24 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
           )}
 
           {rec.type === "weekly" && (
-            <Field label="Fim (opcional)" hint="Vazio = sem data de término">
-              <input
-                type="date"
-                className={inputClass}
-                value={form.endDate || ""}
-                onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Início (opcional)" hint="Vazio = vale em todo o período visível">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={form.startDate || ""}
+                  onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                />
+              </Field>
+              <Field label="Fim (opcional)" hint="Vazio = sem data de término">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={form.endDate || ""}
+                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                />
+              </Field>
+            </div>
           )}
         </div>
       </form>

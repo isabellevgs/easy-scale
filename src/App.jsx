@@ -6,6 +6,7 @@ import TeamPage from "./pages/TeamPage";
 import SchedulesPage from "./pages/SchedulesPage";
 import WeekPage from "./pages/WeekPage";
 import MonthPage from "./pages/MonthPage";
+import WorkloadSummaryPage from "./pages/WorkloadSummaryPage";
 import SettingsPage from "./pages/SettingsPage";
 import { ShiftsProvider } from "./context/ShiftsProvider";
 import { useAppData } from "./hooks/useAppData";
@@ -85,6 +86,16 @@ export default function App() {
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
+                />
+              }
+            />
+            <Route
+              path="/carga-horaria"
+              element={
+                <WorkloadSummaryPage
+                  people={data.people}
+                  rules={data.rules}
+                  holidays={data.holidays}
                 />
               }
             />

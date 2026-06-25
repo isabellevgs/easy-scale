@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarPlus, Trash2, Pencil, Users as UsersIcon, History, SlidersHorizontal, X, ChevronDown } from "lucide-react";
+import { CalendarPlus, Trash2, Pencil, Users as UsersIcon, History, SlidersHorizontal, X, ChevronDown, CalendarClock } from "lucide-react";
 import {
   Button,
   Card,
@@ -69,7 +69,7 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
     [people]
   );
 
-  const { active: activeRules, expired: expiredRules } = useMemo(
+  const { active: activeRules, scheduled: scheduledRules, expired: expiredRules } = useMemo(
     () => partitionRulesByStatus(rules),
     [rules]
   );
@@ -79,18 +79,25 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
     [activeRules, filters]
   );
 
+  const filteredScheduledRules = useMemo(
+    () => scheduledRules.filter((rule) => matchesFilters(rule, filters)),
+    [scheduledRules, filters]
+  );
+
   const filteredExpiredRules = useMemo(
     () => expiredRules.filter((rule) => matchesFilters(rule, filters)),
     [expiredRules, filters]
   );
 
-  const showActiveSection = filters.status !== "expired";
-  const showExpiredSection = filters.status !== "active";
+  const showActiveSection = filters.status === "all" || filters.status === "active";
+  const showScheduledSection = filters.status === "all" || filters.status === "scheduled";
+  const showExpiredSection = filters.status === "all" || filters.status === "expired";
   const hasActiveFilters = countActiveFilters(filters) > 0;
   const activeFilterCount = countActiveFilters(filters);
 
   const visibleCount =
     (showActiveSection ? filteredActiveRules.length : 0) +
+    (showScheduledSection ? filteredScheduledRules.length : 0) +
     (showExpiredSection ? filteredExpiredRules.length : 0);
 
   function clearFilters() {
@@ -214,7 +221,7 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
                 </Card>
               )}
 
-              {showActiveSection && activeRules.length === 0 && (
+              {showActiveSection && activeRules.length === 0 && scheduledRules.length === 0 && (
                 <Card className="px-5 py-8 text-center">
                   <p className="text-[14px] font-medium text-ink">Nenhuma escala ativa</p>
                   <p className="mt-1 text-[13px] text-ink-soft">
@@ -239,6 +246,33 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
                         rule={rule}
                         person={peopleById[rule.personId]}
                         people={people}
+                        onEdit={() => openEdit(rule)}
+                        onDelete={() => setConfirmDelete(rule)}
+                      />
+                    ))}
+                  </Card>
+                </section>
+              )}
+
+              {showScheduledSection && filteredScheduledRules.length > 0 && (
+                <section>
+                  <div className="mb-2 flex items-center gap-2">
+                    <CalendarClock className="h-4 w-4 text-ink-faint" />
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-faint">
+                      Escalas agendadas
+                    </h2>
+                    <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                      {filteredScheduledRules.length}
+                    </span>
+                  </div>
+                  <Card className="divide-y divide-border-soft border-dashed">
+                    {filteredScheduledRules.map((rule) => (
+                      <RuleListItem
+                        key={rule.id}
+                        rule={rule}
+                        person={peopleById[rule.personId]}
+                        people={people}
+                        scheduled
                         onEdit={() => openEdit(rule)}
                         onDelete={() => setConfirmDelete(rule)}
                       />
@@ -315,6 +349,7 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
 const STATUS_OPTIONS = [
   { id: "all", label: "Todas" },
   { id: "active", label: "Ativas" },
+  { id: "scheduled", label: "Agendadas" },
   { id: "expired", label: "Passadas" },
 ];
 
@@ -470,23 +505,30 @@ function ScheduleFilters({
   );
 }
 
-function RuleListItem({ rule, person, people, expired = false, onEdit, onDelete }) {
+function RuleListItem({ rule, person, people, expired = false, scheduled = false, onEdit, onDelete }) {
   const { shiftsConfig } = useShifts();
   if (!person) return null;
 
+  const muted = expired || scheduled;
+
   return (
     <div
-      className={`flex items-center gap-3 px-5 py-3.5 ${expired ? "bg-surface/40 opacity-90" : ""}`}
+      className={`flex items-center gap-3 px-5 py-3.5 ${muted ? "bg-surface/40 opacity-90" : ""}`}
     >
       <PersonAvatar nome={person.nome} color={colorForPerson(person.id, people)} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className={`text-[14px] font-medium ${expired ? "text-ink-soft" : "text-ink"}`}>
+          <p className={`text-[14px] font-medium ${muted ? "text-ink-soft" : "text-ink"}`}>
             {person.nome}
           </p>
           {rule.scaleType === SCALE_TYPES.OVERTIME && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
               Hora extra
+            </span>
+          )}
+          {scheduled && (
+            <span className="rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+              Agendada
             </span>
           )}
           {expired && (

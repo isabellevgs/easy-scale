@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadState, saveState, uid } from "../lib/storage";
-import { sortPeopleByName, isValidPersonColor, normalizeHexColor, PEOPLE_PALETTE } from "../lib/constants";
+import {
+  sortPeopleByName,
+  isValidPersonColor,
+  normalizeHexColor,
+  normalizePersonIntervalMinutes,
+  DEFAULT_PERSON_INTERVAL_MINUTES,
+  PEOPLE_PALETTE,
+} from "../lib/constants";
 import {
   DEFAULT_SHIFTS,
   normalizeShifts,
@@ -60,6 +67,11 @@ export function useAppData() {
           person.color = normalizeHexColor(data.color);
         }
       }
+      person.intervalMinutes = normalizePersonIntervalMinutes(
+        typeof data === "object" && data
+          ? data.intervalMinutes ?? DEFAULT_PERSON_INTERVAL_MINUTES
+          : DEFAULT_PERSON_INTERVAL_MINUTES
+      );
       return runAndSave((s) => {
         if (!person.color) {
           person.color = PEOPLE_PALETTE[s.people.length % PEOPLE_PALETTE.length];

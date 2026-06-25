@@ -81,6 +81,37 @@ export function colorForPerson(personId, people) {
   return defaultColorForPerson(personId, people);
 }
 
+export const DEFAULT_PERSON_INTERVAL_MINUTES = 72; // 1h 12min
+
+export function normalizePersonIntervalMinutes(value) {
+  const fallback = DEFAULT_PERSON_INTERVAL_MINUTES;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(Math.round(n), 24 * 60);
+}
+
+export function intervalPartsToMinutes(hours, minutes) {
+  const h = Math.max(0, Math.min(23, Number(hours) || 0));
+  const m = Math.max(0, Math.min(59, Number(minutes) || 0));
+  return h * 60 + m;
+}
+
+export function minutesToIntervalParts(totalMinutes) {
+  const minutes = normalizePersonIntervalMinutes(totalMinutes);
+  return {
+    hours: Math.floor(minutes / 60),
+    minutes: minutes % 60,
+  };
+}
+
+export function formatPersonInterval(totalMinutes) {
+  const { hours, minutes } = minutesToIntervalParts(totalMinutes);
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || hours === 0) parts.push(`${minutes}min`);
+  return parts.join(" ");
+}
+
 export function sortPeopleByName(people) {
   return [...people].sort((a, b) =>
     a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })

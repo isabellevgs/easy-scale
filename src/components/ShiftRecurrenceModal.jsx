@@ -102,7 +102,7 @@ function buildRulePayload(form, dateISO) {
   if (rec.type === "weekly") {
     return {
       scaleType,
-      startDate: "",
+      startDate: form.startDate || "",
       endDate: form.endDate || "",
       recurrence: { type: "weekly", weekdays: rec.weekdays || [getWeekday(dateISO)] },
     };
@@ -345,16 +345,28 @@ export default function ShiftRecurrenceModal({
                 </div>
               </Field>
 
-              <Field label="Fim (opcional)" hint="Vazio = sem data de término">
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={form.endDate || ""}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, endDate: event.target.value }))
-                  }
-                />
-              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Início (opcional)" hint="Vazio = vale em todo o período visível">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={form.startDate || ""}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, startDate: event.target.value }))
+                    }
+                  />
+                </Field>
+                <Field label="Fim (opcional)" hint="Vazio = sem data de término">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={form.endDate || ""}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, endDate: event.target.value }))
+                    }
+                  />
+                </Field>
+              </div>
             </>
           )}
 

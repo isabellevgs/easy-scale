@@ -71,16 +71,11 @@ function expandRuleDates(rule, rangeStartISO, rangeEndISO, holidays = []) {
   const rangeStart = fromISODate(rangeStartISO);
   const rangeEnd = fromISODate(rangeEndISO);
 
-  // Regras semanais respeitam os dias da recorrência em todo o intervalo consultado;
-  // startDate não limita ocorrências (só endDate encerra a regra).
-  const cursorStart =
-    rec.type === "weekly"
-      ? rangeStart
-      : rule.startDate
-        ? isAfter(fromISODate(rule.startDate), rangeStart)
-          ? fromISODate(rule.startDate)
-          : rangeStart
-        : rangeStart;
+  const cursorStart = rule.startDate
+    ? isAfter(fromISODate(rule.startDate), rangeStart)
+      ? fromISODate(rule.startDate)
+      : rangeStart
+    : rangeStart;
   const cursorEnd = rule.endDate
     ? (isBefore(fromISODate(rule.endDate), rangeEnd) ? fromISODate(rule.endDate) : rangeEnd)
     : rangeEnd;
@@ -258,7 +253,7 @@ export function describeRecurrence(rule, weekdayLabels, monthLabels) {
   return "";
 }
 
-/** Regra de dia específico no passado ou semanal com data de fim já ultrapassada. */
+/** Regra de dia específico no passado ou com data de fim já ultrapassada. */
 export function isRuleExpired(rule, todayISO = toISODate(new Date())) {
   const rec = rule.recurrence;
 
@@ -291,13 +286,51 @@ export function isRuleExpired(rule, todayISO = toISODate(new Date())) {
   return false;
 }
 
+function ruleStartDateISO(rule) {
+  const rec = rule.recurrence;
+
+  if (rec.type === "specific_date") {
+    return rec.date || "";
+  }
+
+  if (rec.type === "specific_dates") {
+    const dates = (rec.dates || []).slice().sort();
+    return dates[0] || "";
+  }
+
+  return rule.startDate || "";
+}
+
+/** Regra com início no futuro e ainda não expirada. */
+export function isRuleScheduled(rule, todayISO = toISODate(new Date())) {
+  if (isRuleExpired(rule, todayISO)) return false;
+
+  const rec = rule.recurrence;
+
+  if (rec.type === "specific_date") {
+    return Boolean(rec.date && rec.date > todayISO);
+  }
+
+  if (rec.type === "specific_dates") {
+    const dates = rec.dates || [];
+    if (dates.length === 0) return false;
+    return dates.every((date) => date > todayISO);
+  }
+
+  const startDate = ruleStartDateISO(rule);
+  return Boolean(startDate && startDate > todayISO);
+}
+
 export function partitionRulesByStatus(rules, todayISO = toISODate(new Date())) {
   const active = [];
+  const scheduled = [];
   const expired = [];
 
   for (const rule of rules) {
     if (isRuleExpired(rule, todayISO)) {
       expired.push(rule);
+    } else if (isRuleScheduled(rule, todayISO)) {
+      scheduled.push(rule);
     } else {
       active.push(rule);
     }
@@ -317,6 +350,7 @@ export function partitionRulesByStatus(rules, todayISO = toISODate(new Date())) 
   }
 
   expired.sort((a, b) => ruleExpiredSortDate(b).localeCompare(ruleExpiredSortDate(a)));
+  scheduled.sort((a, b) => ruleStartDateISO(a).localeCompare(ruleStartDateISO(b)));
 
-  return { active, expired };
+  return { active, scheduled, expired };
 }

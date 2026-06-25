@@ -6,6 +6,7 @@ import {
   Home,
   Users,
   CalendarClock,
+  Clock,
   Settings2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { to: "/escalas", label: "Escalas", icon: CalendarClock },
   { to: "/semana", label: "Escala da semana", icon: CalendarRange },
   { to: "/mes", label: "Escala do mês", icon: CalendarDays },
+  { to: "/carga-horaria", label: "Carga horária", icon: Clock },
   { to: "/configuracoes", label: "Ajustes", icon: Settings2 },
 ];
 

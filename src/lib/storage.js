@@ -1,6 +1,12 @@
 import { normalizeShifts, DEFAULT_SHIFTS } from "./shifts";
 import { normalizeShiftNeedsForShifts, normalizeHolidays } from "./shiftNeeds";
-import { sortPeopleByName, isValidPersonColor, normalizeHexColor, PEOPLE_PALETTE } from "./constants";
+import {
+  sortPeopleByName,
+  isValidPersonColor,
+  normalizeHexColor,
+  normalizePersonIntervalMinutes,
+  PEOPLE_PALETTE,
+} from "./constants";
 import { resolveConsistencyRules } from "./consistencyRules";
 import { getShiftIds } from "./shifts";
 
@@ -27,6 +33,7 @@ function normalizePerson(raw) {
   const cargo = typeof raw.cargo === "string" ? raw.cargo.trim() : "";
   if (cargo) person.cargo = cargo;
   if (isValidPersonColor(raw.color)) person.color = normalizeHexColor(raw.color);
+  person.intervalMinutes = normalizePersonIntervalMinutes(raw.intervalMinutes);
   return person;
 }
 
