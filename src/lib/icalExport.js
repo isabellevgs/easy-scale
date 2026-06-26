@@ -3,6 +3,7 @@ import { colorForPerson } from "./constants";
 import { describeScaleType } from "./rules";
 import { formatShiftTime } from "./shifts";
 import { downloadZipArchive } from "./zipStore";
+import { buildOccurrenceTimeline } from "./weekTimeGrid";
 
 const CRLF = "\r\n";
 
@@ -25,30 +26,6 @@ function foldIcsLine(line) {
     rest = rest.slice(74);
   }
   return parts.join(CRLF);
-}
-
-function parseClockTime(timeStr) {
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(timeStr || "");
-  if (!match) return null;
-  return { hours: Number(match[1]), minutes: Number(match[2]) };
-}
-
-function shiftCrossesMidnight(start, end) {
-  const startParts = parseClockTime(start);
-  const endParts = parseClockTime(end);
-  if (!startParts || !endParts) return false;
-
-  const startMinutes = startParts.hours * 60 + startParts.minutes;
-  const endMinutes = endParts.hours * 60 + endParts.minutes;
-  return endMinutes <= startMinutes;
-}
-
-function toIcsLocalDateTime(dateISO, timeStr, dayOffset = 0) {
-  const parts = parseClockTime(timeStr);
-  if (!parts) return null;
-
-  const date = addDays(parseISO(dateISO), dayOffset);
-  return format(date, "yyyyMMdd") + `T${String(parts.hours).padStart(2, "0")}${String(parts.minutes).padStart(2, "0")}00`;
 }
 
 function normalizeIcsColor(colorHex) {
@@ -76,35 +53,84 @@ function buildCalendarHeader(calendarName, colorHex) {
   return lines.join(CRLF);
 }
 
-function buildVevent({ occurrence, person, shift, summary, people }) {
-  const crossesMidnight = shiftCrossesMidnight(shift.start, shift.end);
-  const dtStart = toIcsLocalDateTime(occurrence.date, shift.start);
-  const dtEnd = toIcsLocalDateTime(occurrence.date, shift.end, crossesMidnight ? 1 : 0);
+function minutesToIcsLocalDateTime(dateISO, totalMinutes) {
+  const dayOffset = Math.floor(totalMinutes / (24 * 60));
+  const minutesInDay = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = Math.floor(minutesInDay / 60);
+  const minutes = minutesInDay % 60;
+  const date = addDays(parseISO(dateISO), dayOffset);
+  return (
+    format(date, "yyyyMMdd") +
+    `T${String(hours).padStart(2, "0")}${String(minutes).padStart(2, "0")}00`
+  );
+}
 
+function buildVeventBlock({
+  uid,
+  dateISO,
+  startMinutes,
+  endMinutes,
+  summary,
+  description,
+  colorHex,
+}) {
+  const dtStart = minutesToIcsLocalDateTime(dateISO, startMinutes);
+  const dtEnd = minutesToIcsLocalDateTime(dateISO, endMinutes);
   if (!dtStart || !dtEnd) return null;
 
-  const eventSummary = summary || person.nome;
-  const description = `${shift.label} · ${formatShiftTime(shift)} · ${describeScaleType(occurrence.scaleType)}`;
-  const uid = `${occurrence.id}@easyscale`;
   const stamp = format(new Date(), "yyyyMMdd'T'HHmmss'Z'");
-
   const lines = [
     "BEGIN:VEVENT",
     foldIcsLine(`UID:${uid}`),
     foldIcsLine(`DTSTAMP:${stamp}`),
     foldIcsLine(`DTSTART:${dtStart}`),
     foldIcsLine(`DTEND:${dtEnd}`),
-    foldIcsLine(`SUMMARY:${escapeIcsText(eventSummary)}`),
+    foldIcsLine(`SUMMARY:${escapeIcsText(summary)}`),
     foldIcsLine(`DESCRIPTION:${escapeIcsText(description)}`),
   ];
 
-  const color = normalizeIcsColor(colorForPerson(person.id, people));
+  const color = normalizeIcsColor(colorHex);
   if (color) {
     lines.push(foldIcsLine(`COLOR:#${color}`));
   }
 
   lines.push("END:VEVENT");
   return lines.join(CRLF);
+}
+
+function buildVeventsFromOccurrence({ occurrence, person, shift, rule, summary, people }) {
+  const timeline = buildOccurrenceTimeline(occurrence, rule, shift);
+  const eventSummary = summary || person.nome;
+  const color = colorForPerson(person.id, people);
+  const shiftDescription = `${shift.label} · ${formatShiftTime(shift)} · ${describeScaleType(occurrence.scaleType)}`;
+  const events = [];
+
+  const shiftEvent = buildVeventBlock({
+    uid: `${occurrence.id}@easyscale`,
+    dateISO: occurrence.date,
+    startMinutes: timeline.startMinutes,
+    endMinutes: timeline.endMinutes,
+    summary: eventSummary,
+    description: shiftDescription,
+    colorHex: color,
+  });
+  if (shiftEvent) events.push(shiftEvent);
+
+  const breakSegment = timeline.segments.find((segment) => segment.type === "break");
+  if (breakSegment) {
+    const intervalEvent = buildVeventBlock({
+      uid: `${occurrence.id}-interval@easyscale`,
+      dateISO: occurrence.date,
+      startMinutes: breakSegment.startMinutes,
+      endMinutes: breakSegment.endMinutes,
+      summary: "Intervalo",
+      description: breakSegment.label || `${rule.intervalStart} – ${rule.intervalEnd}`,
+      colorHex: color,
+    });
+    if (intervalEvent) events.push(intervalEvent);
+  }
+
+  return events;
 }
 
 function filterOccurrences(occurrences, rangeStartISO, rangeEndISO) {
@@ -138,6 +164,7 @@ export function buildIcsCalendar({
   occurrences,
   people,
   shiftsById,
+  rulesById = {},
   calendarName = "EasyScale",
   calendarColor,
   rangeStartISO,
@@ -150,16 +177,18 @@ export function buildIcsCalendar({
   for (const occurrence of sortOccurrences(filterOccurrences(occurrences, rangeStartISO, rangeEndISO), shiftsById)) {
     const person = peopleById[occurrence.personId];
     const shift = shiftsById[occurrence.shift];
+    const rule = rulesById[occurrence.ruleId];
     if (!person || !shift) continue;
 
-    const event = buildVevent({
+    const occurrenceEvents = buildVeventsFromOccurrence({
       occurrence,
       person,
       shift,
+      rule,
       summary: eventSummary === "person" ? person.nome : eventSummary,
       people,
     });
-    if (event) events.push(event);
+    events.push(...occurrenceEvents);
   }
 
   const header = buildCalendarHeader(calendarName, calendarColor);
@@ -183,6 +212,7 @@ export function downloadScheduleIcs({
   occurrences,
   people,
   shiftsById,
+  rulesById,
   filename,
   calendarName,
   rangeStartISO,
@@ -192,6 +222,7 @@ export function downloadScheduleIcs({
     occurrences,
     people,
     shiftsById,
+    rulesById,
     calendarName,
     rangeStartISO,
     rangeEndISO,
@@ -211,6 +242,7 @@ export function downloadScheduleIcsPerPerson({
   occurrences,
   people,
   shiftsById,
+  rulesById,
   filename,
   rangeStartISO,
   rangeEndISO,
@@ -241,6 +273,7 @@ export function downloadScheduleIcsPerPerson({
       occurrences: personOccurrences,
       people,
       shiftsById,
+      rulesById,
       calendarName: person.nome,
       calendarColor: color,
       eventSummary: "person",

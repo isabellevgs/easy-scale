@@ -44,6 +44,10 @@ export default function MonthPage({
   const [staffingModal, setStaffingModal] = useState(null);
   const exportRef = useRef(null);
   const shiftIds = useMemo(() => shifts.map((shift) => shift.id), [shifts]);
+  const rulesById = useMemo(
+    () => Object.fromEntries(rules.map((rule) => [rule.id, rule])),
+    [rules]
+  );
 
   const baseMonth = useMemo(() => {
     const now = new Date();
@@ -140,6 +144,7 @@ export default function MonthPage({
               occurrences,
               people,
               shiftsById,
+              rulesById,
               filename: `escala-mes-${format(baseMonth, "yyyy-MM")}.ics`,
               calendarName: `EasyScale · ${monthLabel}`,
               rangeStartISO: monthRangeStart,

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { addDays, startOfWeek, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, CalendarRange, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarRange, CalendarPlus, ListChecks } from "lucide-react";
 import { Button, Card } from "../components/ui";
 import RuleModal from "../components/RuleModal";
 import ExportButton from "../components/ExportButton";
@@ -10,6 +10,7 @@ import ScheduleViewToggle from "../components/ScheduleViewToggle";
 import StaffingLegend from "../components/StaffingLegend";
 import ShiftStaffingPeopleModal from "../components/ShiftStaffingPeopleModal";
 import WeekScheduleTable from "../components/WeekScheduleTable";
+import WeekTimeGrid from "../components/WeekTimeGrid";
 import { getOccurrences, toISODate, groupByDate, filterOccurrencesByPerson, formatShiftDateLabel } from "../lib/schedule";
 import { SCHEDULE_VIEW, useScheduleViewMode } from "../hooks/useScheduleViewMode";
 import { usePersonFilter } from "../hooks/usePersonFilter";
@@ -18,8 +19,16 @@ import PersonFilterSelect from "../components/PersonFilterSelect";
 import ScheduleInconsistencies from "../components/ScheduleInconsistencies";
 import { formatMonthPeriodLabels } from "../lib/consistencyRules";
 import PageContainer from "../components/PageContainer";
+import TimeCoverageRulesModal from "../components/TimeCoverageRulesModal";
+import TimeCoverageAlerts from "../components/TimeCoverageAlerts";
+import { detectTimeCoverageViolations } from "../lib/timeCoverageRules";
 import { usePersist } from "../hooks/usePersist";
 import { validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
+import {
+  getShiftStaffing,
+  isShiftNeedEditable,
+  resolveNeedDayIndex,
+} from "../lib/shiftNeeds";
 
 export default function WeekPage({
   people,
@@ -28,6 +37,9 @@ export default function WeekPage({
   holidays,
   consistencyRules,
   onSaveConsistencyRules,
+  timeCoverageRules,
+  onSaveTimeCoverageRules,
+  showTimeCoverageViolations,
   addRule,
   updateRule,
   removeRule,
@@ -36,6 +48,7 @@ export default function WeekPage({
   const { persist } = usePersist();
   const [weekOffset, setWeekOffset] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [coverageRulesModalOpen, setCoverageRulesModalOpen] = useState(false);
   const [viewMode, setViewMode] = useScheduleViewMode();
   const { personIds: personFilterIds, setPersonIds: setPersonFilterIds } = usePersonFilter(people);
   const [staffingModal, setStaffingModal] = useState(null);
@@ -75,7 +88,9 @@ export default function WeekPage({
   const exportSubtitle =
     viewMode === SCHEDULE_VIEW.NEEDS
       ? "Escala semanal · Necessidade"
-      : "Escala semanal · Pessoas";
+      : viewMode === SCHEDULE_VIEW.TIMELINE
+        ? "Escala semanal · Horário"
+        : "Escala semanal · Pessoas";
   const monthKeys = useMemo(
     () => [...new Set(days.map((day) => format(day, "yyyy-MM")))],
     [days]
@@ -83,6 +98,37 @@ export default function WeekPage({
   const inconsistencyPeriodLabel = useMemo(
     () => formatMonthPeriodLabels(monthKeys),
     [monthKeys]
+  );
+
+  const rulesById = useMemo(
+    () => Object.fromEntries(rules.map((rule) => [rule.id, rule])),
+    [rules]
+  );
+
+  const timeCoverageViolations = useMemo(
+    () =>
+      viewMode === SCHEDULE_VIEW.TIMELINE && showTimeCoverageViolations
+        ? detectTimeCoverageViolations({
+            days,
+            occByDate: fullOccByDate,
+            rules,
+            shiftsById,
+            people,
+            holidays,
+            timeCoverageRules,
+          })
+        : [],
+    [
+      viewMode,
+      showTimeCoverageViolations,
+      days,
+      fullOccByDate,
+      rules,
+      shiftsById,
+      people,
+      holidays,
+      timeCoverageRules,
+    ]
   );
 
   function openNew() {
@@ -130,6 +176,19 @@ export default function WeekPage({
     });
   }
 
+  function openTimelineStaffing(day, shiftId) {
+    const iso = toISODate(day);
+    const dayIndex = resolveNeedDayIndex(iso, holidays);
+    if (!isShiftNeedEditable(dayIndex, shiftId, shiftsById)) return;
+
+    const dayOccurrences = fullOccByDate[iso] || [];
+    const row = {
+      shiftId,
+      ...getShiftStaffing(dayOccurrences, shiftId, shiftNeeds, dayIndex, shiftsById),
+    };
+    openStaffingModal(day, row);
+  }
+
   return (
     <PageContainer size="wide">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -166,15 +225,34 @@ export default function WeekPage({
               occurrences: filteredOccurrences,
               people,
               shiftsById,
+              rulesById,
               filename: `escala-semana-${rangeStart}.ics`,
               calendarName: `EasyScale · ${rangeLabel}`,
             }}
           />
         </div>
-        <Button onClick={openNew} disabled={people.length === 0}>
-          <CalendarPlus className="h-4 w-4" />
-          Nova escala
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {viewMode === SCHEDULE_VIEW.TIMELINE && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setCoverageRulesModalOpen(true)}
+              className="relative"
+            >
+              <ListChecks className="h-4 w-4" />
+              Regras de horário
+              {timeCoverageViolations.length > 0 && (
+                <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-bad px-1.5 text-[11px] font-semibold text-white">
+                  {timeCoverageViolations.length}
+                </span>
+              )}
+            </Button>
+          )}
+          <Button onClick={openNew} disabled={people.length === 0}>
+            <CalendarPlus className="h-4 w-4" />
+            Nova escala
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -197,20 +275,37 @@ export default function WeekPage({
             />
           }
         >
-          <WeekScheduleTable
-            days={days}
-            shifts={shifts}
-            shiftsById={shiftsById}
-            occByDate={occByDate}
-            fullOccByDate={fullOccByDate}
-            shiftNeeds={shiftNeeds}
-            holidays={holidays}
-            people={people}
-            viewMode={viewMode}
-            personFilterIds={personFilterIds}
-            todayISO={todayISO}
-            onOpenStaffing={openStaffingModal}
-          />
+          {viewMode === SCHEDULE_VIEW.TIMELINE && (
+            <TimeCoverageAlerts violations={timeCoverageViolations} />
+          )}
+          {viewMode === SCHEDULE_VIEW.TIMELINE ? (
+            <WeekTimeGrid
+              days={days}
+              occByDate={occByDate}
+              rules={rules}
+              shiftsById={shiftsById}
+              people={people}
+              holidays={holidays}
+              todayISO={todayISO}
+              onEventClick={openTimelineStaffing}
+              coverageViolations={timeCoverageViolations}
+            />
+          ) : (
+            <WeekScheduleTable
+              days={days}
+              shifts={shifts}
+              shiftsById={shiftsById}
+              occByDate={occByDate}
+              fullOccByDate={fullOccByDate}
+              shiftNeeds={shiftNeeds}
+              holidays={holidays}
+              people={people}
+              viewMode={viewMode}
+              personFilterIds={personFilterIds}
+              todayISO={todayISO}
+              onOpenStaffing={openStaffingModal}
+            />
+          )}
         </ExportFrame>
       )}
 
@@ -220,6 +315,14 @@ export default function WeekPage({
         initial={null}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
+      />
+
+      <TimeCoverageRulesModal
+        open={coverageRulesModalOpen}
+        timeCoverageRules={timeCoverageRules}
+        showViolationsOnGrid={showTimeCoverageViolations}
+        onClose={() => setCoverageRulesModalOpen(false)}
+        onSaveRules={onSaveTimeCoverageRules}
       />
 
       <ShiftStaffingPeopleModal

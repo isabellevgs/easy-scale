@@ -25,6 +25,7 @@ import {
   pruneConsistencyRulesForShifts,
   removePersonFromConsistencyRules,
 } from "../lib/consistencyRules";
+import { normalizeTimeCoverageRules } from "../lib/timeCoverageRules";
 
 function normalizeShiftItem(raw) {
   const [item] = normalizeShifts([raw]);
@@ -253,8 +254,33 @@ export function useAppData() {
     [runAndSave]
   );
 
+  const updateTimeCoverageRules = useCallback(
+    (payload) => {
+      return runAndSave((s) => {
+        const rules = Array.isArray(payload) ? payload : payload?.rules ?? [];
+        const showViolationsOnGrid = Array.isArray(payload)
+          ? s.showTimeCoverageViolations
+          : payload?.showViolationsOnGrid ?? s.showTimeCoverageViolations;
+
+        return {
+          ...s,
+          timeCoverageRules: normalizeTimeCoverageRules(rules),
+          showTimeCoverageViolations: showViolationsOnGrid !== false,
+        };
+      });
+    },
+    [runAndSave]
+  );
+
   const exportBackup = useCallback(() => {
-    downloadBackup(state);
+    try {
+      return downloadBackup(state);
+    } catch (err) {
+      return {
+        ok: false,
+        error: err?.message || "Não foi possível exportar o backup.",
+      };
+    }
   }, [state]);
 
   const importBackup = useCallback(
@@ -263,6 +289,7 @@ export function useAppData() {
         const nextState = await readBackupFile(file);
         try {
           localStorage.removeItem("easyscale:personFilter");
+          localStorage.removeItem("easyscale:scheduleView");
         } catch {
           // ignore
         }
@@ -288,6 +315,8 @@ export function useAppData() {
     shiftNeeds: state.shiftNeeds,
     holidays: state.holidays,
     consistencyRules: state.consistencyRules,
+    timeCoverageRules: state.timeCoverageRules,
+    showTimeCoverageViolations: state.showTimeCoverageViolations,
     addPerson,
     updatePerson,
     removePerson,
@@ -306,5 +335,6 @@ export function useAppData() {
     exportBackup,
     importBackup,
     updateConsistencyRules,
+    updateTimeCoverageRules,
   };
 }

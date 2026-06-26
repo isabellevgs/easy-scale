@@ -96,8 +96,10 @@ export default function ExportButton({
       const options = { title: title || filenameBase };
       if (kind === "png") {
         await exportNodeAsImage(targetRef.current, `${filenameBase}.png`, options);
+        toast.success("Imagem baixada.");
       } else {
         await exportNodeAsPdf(targetRef.current, `${filenameBase}.pdf`, options);
+        toast.success("PDF baixado.");
       }
     } catch (err) {
       console.error("Falha ao exportar:", err);

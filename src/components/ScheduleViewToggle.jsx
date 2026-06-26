@@ -1,10 +1,11 @@
-import { Users, Target } from "lucide-react";
+import { Users, Target, Clock3 } from "lucide-react";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
 
 export default function ScheduleViewToggle({ value, onChange }) {
   const options = [
     { id: SCHEDULE_VIEW.PEOPLE, label: "Pessoas", icon: Users },
     { id: SCHEDULE_VIEW.NEEDS, label: "Necessidade", icon: Target },
+    { id: SCHEDULE_VIEW.TIMELINE, label: "Horário", icon: Clock3 },
   ];
 
   return (

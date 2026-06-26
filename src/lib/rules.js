@@ -1,3 +1,5 @@
+import { normalizeRuleIntervalFields } from "./ruleInterval";
+
 export const SCALE_TYPES = {
   REGULAR: "regular",
   PLANTAO: "plantao",
@@ -58,6 +60,8 @@ export function emptyRule(personId) {
     personId: personId || "",
     shifts: [],
     scaleType: SCALE_TYPES.REGULAR,
+    intervalStart: "",
+    intervalEnd: "",
     recurrence: { type: "weekly", weekdays: [] },
     startDate: "",
     endDate: "",
@@ -99,11 +103,15 @@ export function normalizeScheduleRules(rawRules, shiftIds = []) {
     if (shifts.length === 0) continue;
 
     seen.add(raw.id);
+    const scaleType = normalizeScaleType(raw.scaleType);
+    const { intervalStart, intervalEnd } = normalizeRuleIntervalFields(raw, scaleType);
     result.push({
       id: raw.id.trim(),
       personId: raw.personId.trim(),
       shifts,
-      scaleType: normalizeScaleType(raw.scaleType),
+      scaleType,
+      intervalStart,
+      intervalEnd,
       recurrence: normalizeRecurrence(raw.recurrence),
       startDate: typeof raw.startDate === "string" ? raw.startDate : "",
       endDate: typeof raw.endDate === "string" ? raw.endDate : "",

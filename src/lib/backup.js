@@ -6,8 +6,10 @@ import {
   countConsistencyRuleLinks,
   countConsistencyRulesWithPeople,
 } from "./consistencyRules";
+import { countTimeCoverageRules } from "./timeCoverageRules";
+import { isRegularScaleType } from "./rules";
 
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 
 function downloadJson(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -38,6 +40,18 @@ export function createBackupPayload(state) {
     easyscale: true,
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
+    features: [
+      "people.intervalMinutes",
+      "rules.scaleType",
+      "rules.intervalStart",
+      "rules.intervalEnd",
+      "shifts",
+      "shiftNeeds",
+      "holidays",
+      "consistencyRules",
+      "timeCoverageRules",
+      "showTimeCoverageViolations",
+    ],
     data,
   };
 }
@@ -48,8 +62,9 @@ export function backupFilename(date = new Date()) {
 
 export function downloadBackup(state) {
   const payload = createBackupPayload(state);
-  downloadJson(backupFilename(), payload);
-  return payload;
+  const filename = backupFilename();
+  downloadJson(filename, payload);
+  return { ok: true, filename, payload };
 }
 
 function extractBackupData(parsed) {
@@ -90,14 +105,24 @@ export async function readBackupFile(file) {
 
 export function describeBackupContents(state) {
   const data = normalizeState(state);
+  const rulesWithInterval = data.rules.filter(
+    (rule) =>
+      isRegularScaleType(rule.scaleType) &&
+      typeof rule.intervalStart === "string" &&
+      rule.intervalStart &&
+      typeof rule.intervalEnd === "string" &&
+      rule.intervalEnd
+  ).length;
 
   return {
     people: data.people.length,
     rules: data.rules.length,
+    rulesWithInterval,
     shifts: data.shifts.length,
     holidays: data.holidays.length,
     includesShiftNeeds: Array.isArray(data.shiftNeeds) && data.shiftNeeds.length > 0,
     consistencyRulesWithPeople: countConsistencyRulesWithPeople(data.consistencyRules),
     consistencyRuleLinks: countConsistencyRuleLinks(data.consistencyRules),
+    timeCoverageRules: countTimeCoverageRules(data.timeCoverageRules),
   };
 }

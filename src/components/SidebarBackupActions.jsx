@@ -77,7 +77,14 @@ export default function SidebarBackupActions({ collapsed, exportBackup, importBa
           collapsed={collapsed}
           label="Exportar backup"
           icon={Download}
-          onClick={exportBackup}
+          onClick={() => {
+            const result = exportBackup();
+            if (result?.ok) {
+              toast.success(`Backup exportado (${result.filename}).`);
+            } else {
+              toast.error(result?.error || "Não foi possível exportar o backup.");
+            }
+          }}
         />
         <SidebarActionButton
           collapsed={collapsed}

@@ -52,9 +52,21 @@ function injectExportStyles(clonedDoc) {
       display: none !important;
     }
     .export-capture--rendering .week-schedule-table-wrap,
-    .export-capture--rendering .export-table-wrap {
+    .export-capture--rendering .export-table-wrap,
+    .export-capture--rendering .export-time-grid {
       display: block !important;
       overflow: visible !important;
+    }
+    .export-capture--rendering .week-time-grid {
+      overflow: visible !important;
+    }
+    .export-capture--rendering .week-time-grid-scroll {
+      max-height: none !important;
+      overflow: visible !important;
+      height: auto !important;
+    }
+    .export-capture--rendering .week-time-grid .sticky {
+      position: static !important;
     }
     .export-capture--rendering .export-week-table {
       min-width: 100% !important;
@@ -99,22 +111,25 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Captura um elemento DOM e baixa como PNG em alta resolução.
- */
-export async function exportNodeAsImage(node, filename = "escala.png", options = {}) {
-  const canvas = await captureNode(node, options);
-
-  await new Promise((resolve, reject) => {
+async function canvasToBlob(canvas, type = "image/png") {
+  return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
         reject(new Error("Falha ao gerar imagem PNG"));
         return;
       }
-      downloadBlob(blob, filename);
-      resolve();
-    }, "image/png");
+      resolve(blob);
+    }, type);
   });
+}
+
+/**
+ * Captura um elemento DOM e baixa como PNG em alta resolução.
+ */
+export async function exportNodeAsImage(node, filename = "escala.png", options = {}) {
+  const canvas = await captureNode(node, options);
+  const blob = await canvasToBlob(canvas, "image/png");
+  downloadBlob(blob, filename);
 }
 
 /**
@@ -150,5 +165,6 @@ export async function exportNodeAsPdf(node, filename = "escala.pdf", options = {
   const y = (pageHeight - imgHeight) / 2;
 
   pdf.addImage(imgData, "PNG", x, y, imgWidth, imgHeight, undefined, "FAST");
-  pdf.save(filename);
+
+  downloadBlob(pdf.output("blob"), filename);
 }

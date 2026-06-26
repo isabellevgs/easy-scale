@@ -38,6 +38,7 @@ export default function SettingsPage({
   shiftNeeds,
   holidays,
   consistencyRules,
+  timeCoverageRules,
   addShift,
   updateShift,
   removeShift,
@@ -70,6 +71,7 @@ export default function SettingsPage({
     shifts: shiftsConfig,
     holidays,
     consistencyRules,
+    timeCoverageRules,
   });
 
   function handleNeedChange(dayIndex, shiftId, value) {
@@ -185,6 +187,15 @@ export default function SettingsPage({
     }
   }
 
+  function handleExportBackup() {
+    const result = exportBackup();
+    if (result?.ok) {
+      notifySave(result, `Backup exportado (${result.filename}).`, "Não foi possível exportar o backup.");
+    } else {
+      notifySave(result, "", result?.error || "Não foi possível exportar o backup.");
+    }
+  }
+
   async function confirmImport() {
     if (!pendingFile) return;
 
@@ -246,7 +257,7 @@ export default function SettingsPage({
             <h2 className="text-[15px] font-semibold text-ink">Backup dos dados</h2>
             <p className="mt-0.5 text-[13px] text-ink-soft">
               Exporte ou importe um arquivo JSON com equipe, escalas, turnos, feriados, necessidade
-              por turno e regras de consistência.
+              por turno, regras de consistência e regras de horário.
             </p>
           </div>
         </div>
@@ -284,12 +295,21 @@ export default function SettingsPage({
                 </span>
               </>
             )}
+            {summary.timeCoverageRules > 0 && (
+              <>
+                ,{" "}
+                <span className="font-medium text-ink">
+                  {summary.timeCoverageRules} regra
+                  {summary.timeCoverageRules !== 1 ? "s" : ""} de horário
+                </span>
+              </>
+            )}
             .
           </p>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={exportBackup}>
+          <Button onClick={handleExportBackup}>
             <Download className="h-4 w-4" />
             Exportar backup
           </Button>

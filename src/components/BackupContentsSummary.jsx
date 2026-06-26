@@ -15,6 +15,14 @@ export default function BackupContentsSummary({ summary }) {
       <span className="font-medium text-ink">
         {summary.shifts} turno{summary.shifts !== 1 ? "s" : ""}
       </span>
+      {summary.rulesWithInterval > 0 && (
+        <>
+          ,{" "}
+          <span className="font-medium text-ink">
+            {summary.rulesWithInterval} com intervalo
+          </span>
+        </>
+      )}
       {summary.holidays > 0 && (
         <>
           ,{" "}
@@ -31,6 +39,15 @@ export default function BackupContentsSummary({ summary }) {
             {summary.consistencyRulesWithPeople !== 1 ? "s" : ""} de consistência (
             {summary.consistencyRuleLinks} vínculo
             {summary.consistencyRuleLinks !== 1 ? "s" : ""})
+          </span>
+        </>
+      )}
+      {summary.timeCoverageRules > 0 && (
+        <>
+          ,{" "}
+          <span className="font-medium text-ink">
+            {summary.timeCoverageRules} regra{summary.timeCoverageRules !== 1 ? "s" : ""} de
+            horário
           </span>
         </>
       )}

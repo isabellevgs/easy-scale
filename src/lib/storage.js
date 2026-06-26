@@ -8,6 +8,7 @@ import {
   PEOPLE_PALETTE,
 } from "./constants";
 import { resolveConsistencyRules } from "./consistencyRules";
+import { normalizeTimeCoverageRules } from "./timeCoverageRules";
 import { getShiftIds } from "./shifts";
 import { normalizeScheduleRules } from "./rules";
 
@@ -20,6 +21,8 @@ export const DEFAULT_STATE = {
   shiftNeeds: normalizeShiftNeedsForShifts(null, DEFAULT_SHIFTS),
   holidays: [],
   consistencyRules: [],
+  timeCoverageRules: [],
+  showTimeCoverageViolations: true,
 };
 
 function normalizePerson(raw) {
@@ -65,6 +68,8 @@ export function normalizeState(parsed) {
     shiftNeeds: normalizeShiftNeedsForShifts(parsed.shiftNeeds, shifts),
     holidays: normalizeHolidays(parsed.holidays),
     consistencyRules: resolveConsistencyRules(parsed, shiftIds),
+    timeCoverageRules: normalizeTimeCoverageRules(parsed.timeCoverageRules),
+    showTimeCoverageViolations: parsed.showTimeCoverageViolations !== false,
   };
 }
 

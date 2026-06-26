@@ -52,14 +52,16 @@ export default function BackupExportReminder({ exportBackup }) {
   if (!visible) return null;
 
   function handleExport() {
-    exportBackup();
-    dismiss();
+    const result = exportBackup();
+    if (result?.ok) {
+      dismiss();
+    }
   }
 
   return (
     <div
       role="alert"
-      className="fixed inset-x-0 top-0 z-30 border-b border-brand/25 bg-brand-soft/95 px-4 py-3 backdrop-blur-sm"
+      className="fixed inset-x-0 top-0 z-[60] border-b border-brand/25 bg-brand-soft/95 px-4 py-3 backdrop-blur-sm"
     >
       <div className="mx-auto flex max-w-5xl items-center gap-3">
         <Download className="hidden h-4 w-4 shrink-0 text-brand sm:block" strokeWidth={2.25} />

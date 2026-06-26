@@ -67,6 +67,9 @@ export default function App() {
                   holidays={data.holidays}
                   consistencyRules={data.consistencyRules}
                   onSaveConsistencyRules={data.updateConsistencyRules}
+                  timeCoverageRules={data.timeCoverageRules}
+                  showTimeCoverageViolations={data.showTimeCoverageViolations}
+                  onSaveTimeCoverageRules={data.updateTimeCoverageRules}
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
@@ -109,6 +112,7 @@ export default function App() {
                   shiftNeeds={data.shiftNeeds}
                   holidays={data.holidays}
                   consistencyRules={data.consistencyRules}
+                  timeCoverageRules={data.timeCoverageRules}
                   addShift={data.addShift}
                   updateShift={data.updateShift}
                   removeShift={data.removeShift}

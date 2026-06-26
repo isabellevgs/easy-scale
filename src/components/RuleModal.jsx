@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, Modal, Field, ClearableDateInput, inputClass } from "./ui";
-import { WEEKDAY_LABELS } from "../lib/constants";
+import { WEEKDAY_LABELS, formatPersonInterval, normalizePersonIntervalMinutes } from "../lib/constants";
 import { useShifts } from "../hooks/useShifts";
-import { emptyRule, SCALE_TYPE_OPTIONS, normalizeScaleType, isNonRegularScaleType } from "../lib/rules";
+import {
+  emptyRule,
+  SCALE_TYPE_OPTIONS,
+  normalizeScaleType,
+  isNonRegularScaleType,
+  isRegularScaleType,
+} from "../lib/rules";
 import { toISODate } from "../lib/schedule";
 import DateMultiPicker from "./DateMultiPicker";
 import CustomRecurrenceFields from "./CustomRecurrenceFields";
 import { emptyCustomRecurrence, isValidCustomRecurrence } from "../lib/customRecurrence";
+import { validateRegularRuleInterval } from "../lib/ruleInterval";
 
 const RECURRENCE_TYPES = [
   { id: "specific_date", label: "Dia específico" },
@@ -33,6 +40,27 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
   const rec = form.recurrence;
   const scaleType = normalizeScaleType(form.scaleType);
   const isNonRegular = isNonRegularScaleType(scaleType);
+  const isRegular = isRegularScaleType(scaleType);
+  const selectedPerson = people.find((person) => person.id === form.personId) ?? null;
+  const selectedShifts = useMemo(
+    () => shifts.filter((shift) => form.shifts.includes(shift.id)),
+    [shifts, form.shifts]
+  );
+  const intervalValidation = useMemo(() => {
+    if (!isRegular) return { ok: true };
+    return validateRegularRuleInterval({
+      person: selectedPerson,
+      selectedShifts,
+      intervalStart: form.intervalStart,
+      intervalEnd: form.intervalEnd,
+    });
+  }, [
+    isRegular,
+    selectedPerson,
+    selectedShifts,
+    form.intervalStart,
+    form.intervalEnd,
+  ]);
 
   function setRecType(type) {
     const base = { type };
@@ -76,7 +104,8 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
     (rec.type !== "specific_date" || rec.date) &&
     (rec.type !== "specific_dates" || (rec.dates || []).length > 0) &&
     (rec.type !== "weekly" || (rec.weekdays || []).length > 0) &&
-    (rec.type !== "custom" || isValidCustomRecurrence(rec, form.startDate));
+    (rec.type !== "custom" || isValidCustomRecurrence(rec, form.startDate)) &&
+    intervalValidation.ok;
 
   return (
     <Modal
@@ -111,6 +140,12 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
                       recurrence: rec,
                     }
                   : { ...form, scaleType };
+
+          if (!isRegular) {
+            payload.intervalStart = "";
+            payload.intervalEnd = "";
+          }
+
           onSave(payload);
         }}
       >
@@ -146,7 +181,15 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, scaleType: option.id }))}
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      scaleType: option.id,
+                      ...(isRegularScaleType(option.id)
+                        ? {}
+                        : { intervalStart: "", intervalEnd: "" }),
+                    }))
+                  }
                   className={`rounded-lg border px-3 py-2.5 text-left text-[13px] font-medium transition-colors ${
                     scaleType === option.id
                       ? "border-brand bg-brand-soft text-brand"
@@ -188,6 +231,59 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
               })}
             </div>
           </Field>
+
+          {isRegular && (
+            <Field
+              label="Horário do intervalo"
+              hint={
+                selectedPerson
+                  ? `Intervalo de ${formatPersonInterval(
+                      normalizePersonIntervalMinutes(selectedPerson.intervalMinutes)
+                    )} cadastrado para ${selectedPerson.nome}.`
+                  : undefined
+              }
+            >
+              {!form.personId ? (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[13px] text-amber-700">
+                  Selecione uma pessoa antes de configurar o horário do intervalo.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block text-[12px] text-ink-soft">
+                      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                        Início
+                      </span>
+                      <input
+                        type="time"
+                        className={inputClass}
+                        value={form.intervalStart || ""}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, intervalStart: e.target.value }))
+                        }
+                        required
+                      />
+                    </label>
+                    <label className="block text-[12px] text-ink-soft">
+                      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                        Fim
+                      </span>
+                      <input
+                        type="time"
+                        className={inputClass}
+                        value={form.intervalEnd || ""}
+                        onChange={(e) => setForm((f) => ({ ...f, intervalEnd: e.target.value }))}
+                        required
+                      />
+                    </label>
+                  </div>
+                  {!intervalValidation.ok && !intervalValidation.requiresPerson && (
+                    <p className="text-[12px] text-bad">{intervalValidation.error}</p>
+                  )}
+                </div>
+              )}
+            </Field>
+          )}
 
           <Field label="Tipo de recorrência">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
