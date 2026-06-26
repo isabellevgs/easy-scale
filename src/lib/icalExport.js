@@ -207,23 +207,6 @@ export function downloadScheduleIcs({
   return eventCount;
 }
 
-function buildImportReadme(entries) {
-  const lines = [
-    "EasyScale — importar no Google Calendar",
-    "",
-    "1. Importe cada arquivo .ics separadamente.",
-    "2. Ao importar, escolha Criar nova agenda (o nome já vem no arquivo).",
-    "3. O Google Calendar não aplica cor automaticamente na importação.",
-    "    Use a cor indicada abaixo em Configurações da agenda.",
-    "",
-    "Agendas e cores:",
-    ...entries.map(({ name, color }) => `- ${name}: ${color}`),
-    "",
-    "No Apple Calendar e em outros apps, a cor pode ser aplicada automaticamente.",
-  ];
-  return lines.join("\n");
-}
-
 export function downloadScheduleIcsPerPerson({
   occurrences,
   people,
@@ -247,7 +230,6 @@ export function downloadScheduleIcsPerPerson({
     throw new Error("Não há escalas no período para exportar.");
   }
 
-  const readmeEntries = [];
   const zipFiles = [];
 
   for (const [personId, personOccurrences] of byPerson) {
@@ -267,9 +249,8 @@ export function downloadScheduleIcsPerPerson({
     const eventCount = (content.match(/BEGIN:VEVENT/g) || []).length;
     if (eventCount === 0) continue;
 
-    readmeEntries.push({ name: person.nome, color });
     zipFiles.push({
-      path: `agendas/${slugifyFilename(person.nome)}.ics`,
+      path: `${slugifyFilename(person.nome)}.ics`,
       content,
     });
   }
@@ -278,16 +259,12 @@ export function downloadScheduleIcsPerPerson({
     throw new Error("Não há escalas no período para exportar.");
   }
 
-  zipFiles.unshift({
-    path: "COMO-IMPORTAR.txt",
-    content: buildImportReadme(readmeEntries),
-  });
-
   downloadZipArchive(zipFiles, filename);
 
-  const eventCount = zipFiles
-    .slice(1)
-    .reduce((total, file) => total + ((file.content.match(/BEGIN:VEVENT/g) || []).length), 0);
+  const eventCount = zipFiles.reduce(
+    (total, file) => total + ((file.content.match(/BEGIN:VEVENT/g) || []).length),
+    0
+  );
 
-  return { personCount: zipFiles.length - 1, eventCount };
+  return { personCount: zipFiles.length, eventCount };
 }
