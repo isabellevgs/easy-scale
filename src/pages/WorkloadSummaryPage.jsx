@@ -77,11 +77,11 @@ export default function WorkloadSummaryPage({ people, rules, holidays = [] }) {
             <table className="w-full min-w-[640px] border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-border-soft bg-surface-2 text-[11px] uppercase tracking-wide">
-                  <th className="px-5 py-3 text-left font-medium text-[#f5a623]">Colaborador</th>
+                  <th className="px-5 py-3 text-left font-medium text-brand">Colaborador</th>
                   {grid.weekColumns.map((week) => (
                     <th
                       key={week.index}
-                      className="px-3 py-3 text-center font-medium text-[#f5a623]"
+                      className="px-3 py-3 text-center font-medium text-brand"
                       title={[week.title, week.hint].filter(Boolean).join(" · ")}
                     >
                       <span className="block">{week.label}</span>
@@ -90,7 +90,7 @@ export default function WorkloadSummaryPage({ people, rules, holidays = [] }) {
                       </span>
                     </th>
                   ))}
-                  <th className="border-l border-border-soft px-5 py-3 text-center font-medium text-[#f5a623]">
+                  <th className="border-l border-border-soft px-5 py-3 text-center font-medium text-brand">
                     Mês
                   </th>
                 </tr>
