@@ -13,7 +13,7 @@ import { toISODate } from "../lib/schedule";
 import DateMultiPicker from "./DateMultiPicker";
 import CustomRecurrenceFields from "./CustomRecurrenceFields";
 import { emptyCustomRecurrence, isValidCustomRecurrence } from "../lib/customRecurrence";
-import { validateRegularRuleInterval } from "../lib/ruleInterval";
+import { validateRegularRuleInterval, isValidTime, addMinutesToTime } from "../lib/ruleInterval";
 
 const RECURRENCE_TYPES = [
   { id: "specific_date", label: "Dia específico" },
@@ -26,7 +26,7 @@ function todayISO() {
   return toISODate(new Date());
 }
 
-export default function RuleModal({ open, people, initial, onClose, onSave }) {
+export default function RuleModal({ open, people, initial, onClose, onSave, title, zIndex = 50 }) {
   const { shifts } = useShifts();
   const [form, setForm] = useState(() => initial || emptyRule());
 
@@ -80,6 +80,20 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
     setForm((f) => ({ ...f, recurrence: base, startDate: "", endDate: "" }));
   }
 
+  function handleIntervalStartChange(intervalStart) {
+    setForm((f) => {
+      const person = people.find((p) => p.id === f.personId);
+      if (!person || !isValidTime(intervalStart)) {
+        return { ...f, intervalStart };
+      }
+      const intervalEnd = addMinutesToTime(
+        intervalStart,
+        normalizePersonIntervalMinutes(person.intervalMinutes)
+      );
+      return { ...f, intervalStart, intervalEnd };
+    });
+  }
+
   function toggleWeekday(w) {
     setForm((f) => {
       const current = f.recurrence.weekdays || [];
@@ -111,8 +125,9 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={initial ? "Editar escala" : "Nova escala"}
+      title={title ?? (initial ? "Editar escala" : "Nova escala")}
       width="max-w-lg"
+      zIndex={zIndex}
       footer={
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -258,9 +273,7 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
                         type="time"
                         className={inputClass}
                         value={form.intervalStart || ""}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, intervalStart: e.target.value }))
-                        }
+                        onChange={(e) => handleIntervalStartChange(e.target.value)}
                         required
                       />
                     </label>

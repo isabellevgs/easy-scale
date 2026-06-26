@@ -10,6 +10,18 @@ export function parseTimeToMinutes(time) {
   return hours * 60 + minutes;
 }
 
+export function minutesToTime(totalMinutes) {
+  const normalized = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function addMinutesToTime(time, minutes) {
+  if (!isValidTime(time)) return "";
+  return minutesToTime(parseTimeToMinutes(time) + minutes);
+}
+
 export function intervalDurationMinutes(intervalStart, intervalEnd) {
   if (!isValidTime(intervalStart) || !isValidTime(intervalEnd)) return 0;
 

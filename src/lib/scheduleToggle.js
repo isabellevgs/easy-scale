@@ -3,6 +3,7 @@ import { getOccurrences } from "./schedule";
 import { validateRuleSingleShiftPerDay } from "./scheduleValidation";
 import { normalizeScaleType } from "./rules";
 import { CUSTOM_END_TYPES } from "./customRecurrence";
+import { normalizeRuleIntervalFields } from "./ruleInterval";
 
 export const UNSCHEDULE_SCOPE = {
   DAY: "day",
@@ -344,6 +345,7 @@ export async function applyPersonShiftRecurrence(
     recurrence: rulePayload.recurrence,
     startDate: rulePayload.startDate || "",
     endDate: rulePayload.endDate || "",
+    ...normalizeRuleIntervalFields(rulePayload, rulePayload.scaleType),
   };
 
   const validation = validateRuleSingleShiftPerDay(remainingRules, candidateRule, holidays, {

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Repeat } from "lucide-react";
+import { Check, Repeat, Pencil } from "lucide-react";
 import { Modal, PersonAvatar, IconButton, Button } from "./ui";
 import ShiftRecurrenceModal from "./ShiftRecurrenceModal";
+import RuleModal from "./RuleModal";
 import { colorForPerson, peopleScheduledIn, sortPeopleByName } from "../lib/constants";
 import {
   getStaffingStatus,
@@ -14,11 +15,12 @@ import { getOccurrences, describePersonScaleOverlap } from "../lib/schedule";
 import PersonScaleOverlapIcon from "./PersonScaleOverlapIcon";
 import {
   isPersonShiftRecurring,
+  getPersonShiftRuleOnDate,
   removePersonShiftOnDate,
   schedulePersonOnShiftDate,
   UNSCHEDULE_SCOPE,
 } from "../lib/scheduleToggle";
-import { findConflictingShiftForPerson } from "../lib/scheduleValidation";
+import { findConflictingShiftForPerson, validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
 import { SCALE_TYPES } from "../lib/rules";
 import { usePersist } from "../hooks/usePersist";
 import { useShifts } from "../hooks/useShifts";
@@ -40,6 +42,7 @@ export default function ShiftStaffingPeopleModal({
   const { shiftsById } = useShifts();
   const { persist } = usePersist();
   const [recurrencePerson, setRecurrencePerson] = useState(null);
+  const [adjustPerson, setAdjustPerson] = useState(null);
   const [removeConfirmPerson, setRemoveConfirmPerson] = useState(null);
 
   const dayOccurrences = useMemo(() => {
@@ -75,6 +78,15 @@ export default function ShiftStaffingPeopleModal({
     }
     return map;
   }, [dayOccurrences, shift, allPeople]);
+
+  const adjustEditingRule = useMemo(() => {
+    if (!adjustPerson || !shift || !dateISO) return null;
+    return getPersonShiftRuleOnDate(
+      rules,
+      { personId: adjustPerson.id, shiftId: shift.id, dateISO },
+      holidays
+    );
+  }, [adjustPerson, shift, dateISO, rules, holidays]);
 
   if (!shift) return null;
 
@@ -131,8 +143,42 @@ export default function ShiftStaffingPeopleModal({
     });
   }
 
+  function handleAdjustSave(ruleData) {
+    if (!adjustEditingRule) return;
+
+    const payload =
+      ruleData.recurrence?.type === "specific_date" ||
+      ruleData.recurrence?.type === "specific_dates"
+        ? { ...ruleData, startDate: "", endDate: "" }
+        : ruleData.recurrence?.type === "custom"
+          ? {
+              ...ruleData,
+              endDate:
+                ruleData.recurrence.endType === "on_date" ? ruleData.recurrence.endDate : "",
+            }
+          : ruleData;
+
+    const validation = validateRuleSingleShiftPerDay(rules, payload, holidays, {
+      excludeRuleId: adjustEditingRule.id,
+      shiftsById,
+    });
+    if (!validation.ok) {
+      persist(() => Promise.resolve(validation), "", "");
+      return;
+    }
+
+    persist(
+      () => updateRule(adjustEditingRule.id, payload),
+      "Escala atualizada.",
+      "Não foi possível salvar a escala."
+    ).then((result) => {
+      if (result?.ok) setAdjustPerson(null);
+    });
+  }
+
   function handleClose() {
     setRecurrencePerson(null);
+    setAdjustPerson(null);
     setRemoveConfirmPerson(null);
     onClose();
   }
@@ -194,8 +240,6 @@ export default function ShiftStaffingPeopleModal({
                     onClick={() => handlePersonClick(person.id)}
                     className={`flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                       selected ? "pr-2 hover:bg-brand-soft/35" : "hover:bg-surface-2"
-                    } ${selected && !hasScaleOverlap ? "pr-11" : ""} ${
-                      selected && hasScaleOverlap ? "pr-1" : ""
                     }`}
                     aria-pressed={selected}
                   >
@@ -227,20 +271,27 @@ export default function ShiftStaffingPeopleModal({
                   )}
 
                   {selected && (
-                    <IconButton
-                      className={`my-auto mr-1 shrink-0 ${
-                        recurring ? "text-brand hover:text-brand" : ""
-                      }`}
-                      onClick={() => setRecurrencePerson(person)}
-                      aria-label="Configurar recorrência"
-                      title={
-                        recurring
-                          ? "Escala semanal — toque para editar"
-                          : "Só este dia — toque para tornar recorrente"
-                      }
-                    >
-                      <Repeat className={`h-4 w-4 ${recurring ? "text-brand" : "text-ink-faint"}`} />
-                    </IconButton>
+                    <div className="my-auto flex shrink-0 items-center pr-1">
+                      <IconButton
+                        onClick={() => setAdjustPerson(person)}
+                        aria-label="Ajustar escala atual"
+                        title="Ajustar escala atual"
+                      >
+                        <Pencil className="h-4 w-4 text-ink-faint" />
+                      </IconButton>
+                      <IconButton
+                        className={recurring ? "text-brand hover:text-brand" : ""}
+                        onClick={() => setRecurrencePerson(person)}
+                        aria-label="Configurar recorrência"
+                        title={
+                          recurring
+                            ? "Escala semanal — toque para editar"
+                            : "Só este dia — toque para tornar recorrente"
+                        }
+                      >
+                        <Repeat className={`h-4 w-4 ${recurring ? "text-brand" : "text-ink-faint"}`} />
+                      </IconButton>
+                    </div>
                   )}
                 </div>
               );
@@ -296,6 +347,16 @@ export default function ShiftStaffingPeopleModal({
           </Button>
         </div>
       </Modal>
+
+      <RuleModal
+        open={!!adjustPerson && !!adjustEditingRule}
+        people={allPeople}
+        initial={adjustEditingRule}
+        title="Ajustar escala"
+        zIndex={60}
+        onClose={() => setAdjustPerson(null)}
+        onSave={handleAdjustSave}
+      />
 
       <ShiftRecurrenceModal
         open={!!recurrencePerson}

@@ -21,7 +21,7 @@ function loadViewMode() {
   } catch {
     // ignore
   }
-  return SCHEDULE_VIEW.PEOPLE;
+  return SCHEDULE_VIEW.TIMELINE;
 }
 
 export function useScheduleViewMode() {
