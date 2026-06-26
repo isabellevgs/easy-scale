@@ -1,6 +1,14 @@
+import { addDays, format, parseISO, subDays } from "date-fns";
 import { getOccurrences } from "./schedule";
 import { validateRuleSingleShiftPerDay } from "./scheduleValidation";
 import { normalizeScaleType } from "./rules";
+import { CUSTOM_END_TYPES } from "./customRecurrence";
+
+export const UNSCHEDULE_SCOPE = {
+  DAY: "day",
+  FUTURE: "future",
+  ALL: "all",
+};
 
 const RECURRING_TYPES = new Set(["weekly", "custom", "specific_dates"]);
 
@@ -11,6 +19,136 @@ function getWeekday(dateISO) {
 function mergeSaveResults(results) {
   const failed = results.find((result) => result && result.ok === false);
   return failed || { ok: true };
+}
+
+function dayBefore(dateISO) {
+  return format(subDays(parseISO(dateISO), 1), "yyyy-MM-dd");
+}
+
+function dayAfter(dateISO) {
+  return format(addDays(parseISO(dateISO), 1), "yyyy-MM-dd");
+}
+
+function ruleOnlyHasShift(rule, shiftId) {
+  const shifts = rule.shifts || [];
+  return shifts.length === 1 && shifts[0] === shiftId;
+}
+
+function removeShiftFromRuleTasks(rule, shiftId, updateRule, removeRule) {
+  if (ruleOnlyHasShift(rule, shiftId)) {
+    return [removeRule(rule.id)];
+  }
+  return [updateRule(rule.id, { shifts: rule.shifts.filter((id) => id !== shiftId) })];
+}
+
+function hasOccurrencesInRange(rule, shiftId, rangeStartISO, rangeEndISO, holidays) {
+  const occurrences = getOccurrences([rule], rangeStartISO, rangeEndISO, holidays);
+  return occurrences.some((occ) => occ.shift === shiftId);
+}
+
+function hasOccurrencesBefore(rule, shiftId, dateISO, holidays) {
+  const farPast = format(subDays(parseISO(dateISO), 366 * 5), "yyyy-MM-dd");
+  return hasOccurrencesInRange(rule, shiftId, farPast, dayBefore(dateISO), holidays);
+}
+
+function hasOccurrencesAfter(rule, shiftId, dateISO, holidays) {
+  const farFuture = format(addDays(parseISO(dateISO), 366 * 5), "yyyy-MM-dd");
+  return hasOccurrencesInRange(rule, shiftId, dayAfter(dateISO), farFuture, holidays);
+}
+
+function buildContinuationRule(rule, shiftId, startDate) {
+  return {
+    personId: rule.personId,
+    shifts: [shiftId],
+    scaleType: normalizeScaleType(rule.scaleType),
+    recurrence: structuredClone(rule.recurrence),
+    startDate,
+    endDate: rule.endDate || "",
+  };
+}
+
+function excludeSingleDayFromRule(rule, shiftId, dateISO, { updateRule, removeRule, addRule }, holidays) {
+  if (!ruleOnlyHasShift(rule, shiftId)) {
+    return removeShiftFromRuleTasks(rule, shiftId, updateRule, removeRule);
+  }
+
+  const rec = rule.recurrence;
+
+  if (rec.type === "specific_date") {
+    if (rec.date === dateISO) return [removeRule(rule.id)];
+    return [];
+  }
+
+  if (rec.type === "specific_dates") {
+    const nextDates = (rec.dates || []).filter((day) => day !== dateISO);
+    if (nextDates.length === 0) return [removeRule(rule.id)];
+    return [updateRule(rule.id, { recurrence: { ...rec, dates: nextDates } })];
+  }
+
+  const before = dayBefore(dateISO);
+  const after = dayAfter(dateISO);
+  const hasPast = hasOccurrencesBefore(rule, shiftId, dateISO, holidays);
+  const hasFuture = hasOccurrencesAfter(rule, shiftId, dateISO, holidays);
+  const tasks = [];
+
+  if (hasPast && hasFuture) {
+    tasks.push(updateRule(rule.id, { endDate: before }));
+    tasks.push(addRule(buildContinuationRule(rule, shiftId, after)));
+  } else if (hasPast) {
+    tasks.push(updateRule(rule.id, { endDate: before }));
+  } else if (hasFuture) {
+    tasks.push(updateRule(rule.id, { startDate: after }));
+  } else {
+    tasks.push(removeRule(rule.id));
+  }
+
+  return tasks;
+}
+
+function excludeFutureFromRule(rule, shiftId, dateISO, { updateRule, removeRule }) {
+  if (!ruleOnlyHasShift(rule, shiftId)) {
+    return removeShiftFromRuleTasks(rule, shiftId, updateRule, removeRule);
+  }
+
+  const rec = rule.recurrence;
+  const before = dayBefore(dateISO);
+
+  if (rec.type === "specific_date") {
+    if (rec.date >= dateISO) return [removeRule(rule.id)];
+    return [];
+  }
+
+  if (rec.type === "specific_dates") {
+    const nextDates = (rec.dates || []).filter((day) => day < dateISO);
+    if (nextDates.length === 0) return [removeRule(rule.id)];
+    return [updateRule(rule.id, { recurrence: { ...rec, dates: nextDates } })];
+  }
+
+  if (rule.startDate && rule.startDate >= dateISO) {
+    return [removeRule(rule.id)];
+  }
+
+  if (rec.type === "custom") {
+    return [
+      updateRule(rule.id, {
+        endDate: before,
+        recurrence: {
+          ...rec,
+          endType: CUSTOM_END_TYPES.ON_DATE,
+          endDate: before,
+        },
+      }),
+    ];
+  }
+
+  return [updateRule(rule.id, { endDate: before })];
+}
+
+export function getPersonShiftRules(rules, personId, shiftId) {
+  if (!Array.isArray(rules)) return [];
+  return rules.filter(
+    (rule) => rule.personId === personId && (rule.shifts || []).includes(shiftId)
+  );
 }
 
 export function isPersonScheduledOnShiftDate(rules, { personId, shiftId, dateISO }, holidays = []) {
@@ -61,8 +199,49 @@ export function schedulePersonOnShiftDate({
   });
 }
 
+export async function removePersonShiftOnDate(
+  { rules, addRule, updateRule, removeRule, holidays },
+  { personId, shiftId, dateISO },
+  scope = UNSCHEDULE_SCOPE.DAY
+) {
+  if (scope === UNSCHEDULE_SCOPE.ALL) {
+    const matching = getPersonShiftRules(rules, personId, shiftId);
+    const tasks = [];
+
+    for (const rule of matching) {
+      tasks.push(...removeShiftFromRuleTasks(rule, shiftId, updateRule, removeRule));
+    }
+
+    if (tasks.length === 0) return { ok: true };
+    return mergeSaveResults(await Promise.all(tasks));
+  }
+
+  const covering = getRulesCoveringShiftDate(rules, { personId, shiftId, dateISO }, holidays);
+  const tasks = [];
+
+  for (const rule of covering) {
+    if (scope === UNSCHEDULE_SCOPE.FUTURE) {
+      tasks.push(...excludeFutureFromRule(rule, shiftId, dateISO, { updateRule, removeRule }));
+    } else {
+      tasks.push(
+        ...excludeSingleDayFromRule(
+          rule,
+          shiftId,
+          dateISO,
+          { updateRule, removeRule, addRule },
+          holidays
+        )
+      );
+    }
+  }
+
+  if (tasks.length === 0) return { ok: true };
+  return mergeSaveResults(await Promise.all(tasks));
+}
+
 export async function unschedulePersonOnShiftDate({
   rules,
+  addRule,
   updateRule,
   removeRule,
   personId,
@@ -70,56 +249,11 @@ export async function unschedulePersonOnShiftDate({
   dateISO,
   holidays,
 }) {
-  const covering = getRulesCoveringShiftDate(rules, { personId, shiftId, dateISO }, holidays);
-  const weekday = getWeekday(dateISO);
-  const tasks = [];
-
-  for (const rule of covering) {
-    const rec = rule.recurrence;
-
-    if (rec.type === "specific_date" && rec.date === dateISO) {
-      if (rule.shifts.length <= 1) {
-        tasks.push(removeRule(rule.id));
-      } else {
-        tasks.push(updateRule(rule.id, { shifts: rule.shifts.filter((id) => id !== shiftId) }));
-      }
-      continue;
-    }
-
-    if (rec.type === "specific_dates") {
-      const shifts = rule.shifts || [];
-      const onlyThisShift = shifts.length === 1 && shifts[0] === shiftId;
-      const nextDates = (rec.dates || []).filter((day) => day !== dateISO);
-
-      if (onlyThisShift) {
-        if (nextDates.length === 0) tasks.push(removeRule(rule.id));
-        else tasks.push(updateRule(rule.id, { recurrence: { ...rec, dates: nextDates } }));
-      } else if (shifts.includes(shiftId)) {
-        tasks.push(updateRule(rule.id, { shifts: shifts.filter((id) => id !== shiftId) }));
-      }
-      continue;
-    }
-
-    if (rec.type === "weekly") {
-      const weekdays = rec.weekdays || [];
-      const shifts = rule.shifts || [];
-      const onlyThisShift = shifts.length === 1 && shifts[0] === shiftId;
-
-      if (onlyThisShift) {
-        const nextWeekdays = weekdays.filter((day) => day !== weekday);
-        if (nextWeekdays.length === 0) tasks.push(removeRule(rule.id));
-        else tasks.push(updateRule(rule.id, { recurrence: { ...rec, weekdays: nextWeekdays } }));
-      } else if (shifts.includes(shiftId)) {
-        tasks.push(updateRule(rule.id, { shifts: shifts.filter((id) => id !== shiftId) }));
-      }
-      continue;
-    }
-
-    tasks.push(removeRule(rule.id));
-  }
-
-  if (tasks.length === 0) return { ok: true };
-  return mergeSaveResults(await Promise.all(tasks));
+  return removePersonShiftOnDate(
+    { rules, addRule, updateRule, removeRule, holidays },
+    { personId, shiftId, dateISO },
+    UNSCHEDULE_SCOPE.DAY
+  );
 }
 
 export function getPersonShiftRuleOnDate(rules, { personId, shiftId, dateISO }, holidays = []) {
@@ -225,7 +359,16 @@ export async function togglePersonShiftOnDate(actions, params) {
   const { personId, shiftId, dateISO } = params;
 
   if (isPersonScheduledOnShiftDate(rules, { personId, shiftId, dateISO }, holidays)) {
-    return unschedulePersonOnShiftDate({ rules, updateRule, removeRule, personId, shiftId, dateISO, holidays });
+    return unschedulePersonOnShiftDate({
+      rules,
+      addRule,
+      updateRule,
+      removeRule,
+      personId,
+      shiftId,
+      dateISO,
+      holidays,
+    });
   }
 
   return schedulePersonOnShiftDate({

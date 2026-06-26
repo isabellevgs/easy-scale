@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Field, inputClass, Modal } from "./ui";
-import { SHIFT_SCOPES, createEmptyShift } from "../lib/shifts";
+import { WEEKDAY_LABELS } from "../lib/constants";
+import { createEmptyShift, validateShiftWeekdayConfig } from "../lib/shifts";
 
 function isValidTime(value) {
   return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
@@ -20,6 +21,16 @@ export default function ShiftModal({ open, initial, onClose, onSave }) {
 
   const isEdit = Boolean(initial?.id);
 
+  function toggleWeekday(day) {
+    setForm((current) => {
+      const selected = current.weekdays.includes(day)
+        ? current.weekdays.filter((item) => item !== day)
+        : [...current.weekdays, day].sort((a, b) => a - b);
+      return { ...current, weekdays: selected };
+    });
+    setError("");
+  }
+
   function handleSubmit(event) {
     event.preventDefault();
     const label = form.label.trim();
@@ -32,11 +43,18 @@ export default function ShiftModal({ open, initial, onClose, onSave }) {
       return;
     }
 
+    const weekdayValidation = validateShiftWeekdayConfig(form.weekdays, form.appliesOnHolidays);
+    if (!weekdayValidation.ok) {
+      setError(weekdayValidation.error);
+      return;
+    }
+
     onSave({
       label,
       start: form.start,
       end: form.end,
-      scope: form.scope,
+      weekdays: weekdayValidation.weekdays,
+      appliesOnHolidays: weekdayValidation.appliesOnHolidays,
     });
   }
 
@@ -76,28 +94,39 @@ export default function ShiftModal({ open, initial, onClose, onSave }) {
           </Field>
         </div>
 
-        <Field label="Aplica-se a" hint="Define em quais dias a meta de pessoas pode ser configurada.">
-          <div className="space-y-2">
-            {Object.values(SHIFT_SCOPES).map((scope) => (
-              <label
-                key={scope.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 transition-colors ${
-                  form.scope === scope.id
-                    ? "border-brand/50 bg-brand-soft"
-                    : "border-border-soft bg-surface hover:bg-surface-2"
+        <Field
+          label="Aplica-se a"
+          hint="Define em quais dias o turno aparece nas visualizações e na necessidade de pessoas."
+        >
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+            {WEEKDAY_LABELS.map((dayLabel, day) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleWeekday(day)}
+                className={`rounded-lg border px-2 py-2.5 text-[13px] font-medium transition-colors ${
+                  form.weekdays.includes(day)
+                    ? "border-brand bg-brand-soft text-brand"
+                    : "border-border text-ink-soft hover:bg-surface-2"
                 }`}
               >
-                <input
-                  type="radio"
-                  name="shift-scope"
-                  className="accent-brand"
-                  checked={form.scope === scope.id}
-                  onChange={() => setForm((current) => ({ ...current, scope: scope.id }))}
-                />
-                <span className="text-[14px] text-ink">{scope.label}</span>
-              </label>
+                {dayLabel}
+              </button>
             ))}
           </div>
+
+          <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-xl border border-border-soft px-3.5 py-3 transition-colors hover:bg-surface-2">
+            <input
+              type="checkbox"
+              className="accent-brand"
+              checked={form.appliesOnHolidays}
+              onChange={(e) => {
+                setForm((current) => ({ ...current, appliesOnHolidays: e.target.checked }));
+                setError("");
+              }}
+            />
+            <span className="text-[14px] text-ink">Incluir feriados cadastrados</span>
+          </label>
         </Field>
 
         {error && <p className="mb-3 text-[13px] text-bad">{error}</p>}

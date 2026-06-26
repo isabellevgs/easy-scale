@@ -18,9 +18,9 @@ export function isWeekdayScheduleDay(dateISO, holidays = []) {
   return day >= 1 && day <= 5;
 }
 
-/** Só em dias úteis (seg–sex) vale a regra de um turno por pessoa. */
-export function requiresSingleShiftPerPerson(dateISO, holidays = []) {
-  return isWeekdayScheduleDay(dateISO, holidays);
+/** Escala regular: no máximo um turno por pessoa em qualquer dia (inclui sáb, dom e feriados). */
+export function requiresSingleShiftPerPerson(_dateISO, _holidays = []) {
+  return true;
 }
 
 export function getPersonOtherShiftOnDate(
@@ -115,7 +115,7 @@ function validateNoDuplicateRegularPerShiftOnDay(occurrences, shiftsById = {}) {
         error: `Conflito em ${formatDateLabel(occ.date)}: mais de uma escala regular no turno ${shiftLabel(
           shiftsById,
           occ.shift
-        )}. Só é permitido regular com hora extra.`,
+        )}. Só é permitido uma escala regular por turno; plantão e hora extra podem coexistir.`,
       };
     }
 
@@ -129,16 +129,6 @@ export function validateRuleSingleShiftPerDay(rules, candidateRule, holidays = [
   const { excludeRuleId, shiftsById = {} } = options;
   const shifts = candidateRule.shifts || [];
 
-  const weekdayShiftCount = shifts.filter(
-    (shiftId) => shiftsById[shiftId]?.scope !== "weekend"
-  ).length;
-  if (weekdayShiftCount > 1) {
-    return {
-      ok: false,
-      error: "Selecione apenas um turno de segunda a sexta.",
-    };
-  }
-
   if (shifts.length === 0 || !candidateRule.personId) {
     return { ok: true };
   }
@@ -150,16 +140,13 @@ export function validateRuleSingleShiftPerDay(rules, candidateRule, holidays = [
   if (normalizeScaleType(candidateRule.scaleType) === SCALE_TYPES.REGULAR) {
     const duplicateRegular = validateNoDuplicateRegularPerShiftOnDay(occurrences, shiftsById);
     if (!duplicateRegular.ok) return duplicateRegular;
-  }
-
-  if (normalizeScaleType(candidateRule.scaleType) === SCALE_TYPES.OVERTIME) {
+  } else {
     return { ok: true };
   }
 
   const shiftsByDatePerson = new Map();
 
   for (const occ of occurrences) {
-    if (!requiresSingleShiftPerPerson(occ.date, holidays)) continue;
     if (!isRegularOccurrence(occ)) continue;
 
     const key = `${occ.date}|${occ.personId}`;

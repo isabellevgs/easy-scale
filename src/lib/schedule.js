@@ -125,7 +125,8 @@ export function personHasOverlappingScalesOnShift(shiftOccurrences, personId) {
 
 const SCALE_TYPE_ORDER = {
   [SCALE_TYPES.REGULAR]: 0,
-  [SCALE_TYPES.OVERTIME]: 1,
+  [SCALE_TYPES.PLANTAO]: 1,
+  [SCALE_TYPES.OVERTIME]: 2,
 };
 
 /** Rótulos das escalas distintas da pessoa no turno (ex.: ["Regular", "Hora extra"]). */

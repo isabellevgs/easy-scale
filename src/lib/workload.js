@@ -50,14 +50,9 @@ function filterOccurrencesInRange(occurrences, rangeStartISO, rangeEndISO) {
   );
 }
 
-/** Intervalo só em escala regular em turnos de segunda a sexta. */
-export function occurrenceUsesInterval(occ, shiftsById) {
-  if (normalizeScaleType(occ?.scaleType) === SCALE_TYPES.OVERTIME) return false;
-
-  const shift = shiftsById[occ.shift];
-  if (!shift || shift.scope === "weekend") return false;
-
-  return true;
+/** Intervalo descontado em cada ocorrência de escala regular. */
+export function occurrenceUsesInterval(occ) {
+  return normalizeScaleType(occ?.scaleType) === SCALE_TYPES.REGULAR;
 }
 
 function createEmptyTotals() {
@@ -78,40 +73,30 @@ export function computePersonWorkload(
   rangeStartISO,
   rangeEndISO
 ) {
-  const intervalPerDay = normalizePersonIntervalMinutes(person?.intervalMinutes);
+  const intervalPerShift = normalizePersonIntervalMinutes(person?.intervalMinutes);
   const scoped = filterOccurrencesInRange(personOccurrences, rangeStartISO, rangeEndISO);
-  const byDate = new Map();
+  const daysWorked = new Set();
+  let shiftMinutes = 0;
+  let intervalMinutes = 0;
 
   for (const occ of scoped) {
     const shift = shiftsById[occ.shift];
     if (!shift) continue;
 
-    const duration = shiftDurationMinutes(shift);
-    if (!byDate.has(occ.date)) {
-      byDate.set(occ.date, { shiftMinutes: 0, usesInterval: false });
+    daysWorked.add(occ.date);
+    shiftMinutes += shiftDurationMinutes(shift);
+    if (occurrenceUsesInterval(occ)) {
+      intervalMinutes += intervalPerShift;
     }
-
-    const day = byDate.get(occ.date);
-    day.shiftMinutes += duration;
-    if (occurrenceUsesInterval(occ, shiftsById)) {
-      day.usesInterval = true;
-    }
-  }
-
-  let shiftMinutes = 0;
-  let intervalMinutes = 0;
-  for (const day of byDate.values()) {
-    shiftMinutes += day.shiftMinutes;
-    if (day.usesInterval) intervalMinutes += intervalPerDay;
   }
 
   return {
     personId: person.id,
-    daysWorked: byDate.size,
+    daysWorked: daysWorked.size,
     shiftMinutes,
     intervalMinutes,
     netMinutes: Math.max(0, shiftMinutes - intervalMinutes),
-    intervalPerDay,
+    intervalPerShift,
   };
 }
 

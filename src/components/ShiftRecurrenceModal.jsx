@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Field, Modal, inputClass } from "./ui";
+import { Button, Field, Modal, ClearableDateInput, inputClass } from "./ui";
 import { WEEKDAY_LABELS } from "../lib/constants";
 import { applyPersonShiftRecurrence, getPersonShiftRuleOnDate } from "../lib/scheduleToggle";
 import { usePersist } from "../hooks/usePersist";
@@ -155,7 +155,6 @@ export default function ShiftRecurrenceModal({
 
   const rec = form.recurrence;
   const scaleType = normalizeScaleType(form.scaleType);
-  const isOvertime = scaleType === SCALE_TYPES.OVERTIME;
 
   const isValid =
     (rec.type !== "specific_date" || rec.date) &&
@@ -246,12 +245,14 @@ export default function ShiftRecurrenceModal({
           <Field
             label="Tipo de escala"
             hint={
-              isOvertime
+              scaleType === SCALE_TYPES.OVERTIME
                 ? "Hora extra não entra nas regras de inconsistência, mas conta na necessidade de pessoas."
-                : "Escala regular entra nas regras de inconsistência e na necessidade de pessoas."
+                : scaleType === SCALE_TYPES.PLANTAO
+                  ? "Plantão não entra nas regras de inconsistência, mas conta na necessidade de pessoas."
+                  : "Escala regular entra nas regras de inconsistência e na necessidade de pessoas."
             }
           >
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {SCALE_TYPE_OPTIONS.map((option) => (
                 <button
                   key={option.id}
@@ -347,23 +348,21 @@ export default function ShiftRecurrenceModal({
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Início (opcional)" hint="Vazio = vale em todo o período visível">
-                  <input
-                    type="date"
-                    className={inputClass}
+                  <ClearableDateInput
                     value={form.startDate || ""}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, startDate: event.target.value }))
                     }
+                    clearLabel="Limpar data de início"
                   />
                 </Field>
                 <Field label="Fim (opcional)" hint="Vazio = sem data de término">
-                  <input
-                    type="date"
-                    className={inputClass}
+                  <ClearableDateInput
                     value={form.endDate || ""}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, endDate: event.target.value }))
                     }
+                    clearLabel="Limpar data de fim"
                   />
                 </Field>
               </div>

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Button, Modal, Field, inputClass } from "./ui";
+import { Button, Modal, Field, ClearableDateInput, inputClass } from "./ui";
 import { WEEKDAY_LABELS } from "../lib/constants";
 import { useShifts } from "../hooks/useShifts";
-import { emptyRule, SCALE_TYPE_OPTIONS, normalizeScaleType } from "../lib/rules";
+import { emptyRule, SCALE_TYPE_OPTIONS, normalizeScaleType, isNonRegularScaleType } from "../lib/rules";
 import { toISODate } from "../lib/schedule";
 import DateMultiPicker from "./DateMultiPicker";
 import CustomRecurrenceFields from "./CustomRecurrenceFields";
@@ -32,7 +32,7 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
 
   const rec = form.recurrence;
   const scaleType = normalizeScaleType(form.scaleType);
-  const isOvertime = scaleType === "overtime";
+  const isNonRegular = isNonRegularScaleType(scaleType);
 
   function setRecType(type) {
     const base = { type };
@@ -62,26 +62,11 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
 
   function toggleShift(shiftId) {
     setForm((f) => {
-      const shift = shifts.find((item) => item.id === shiftId);
-      const isWeekendShift = shift?.scope === "weekend";
       const current = f.shifts;
-
-      if (isWeekendShift) {
-        const next = current.includes(shiftId)
-          ? current.filter((id) => id !== shiftId)
-          : [...current, shiftId];
-        return { ...f, shifts: next };
-      }
-
-      const isOnlySelected = current.length === 1 && current[0] === shiftId;
-      if (isOnlySelected) {
-        return { ...f, shifts: current.filter((id) => id !== shiftId) };
-      }
-
-      const weekendIds = current.filter(
-        (id) => shifts.find((item) => item.id === id)?.scope === "weekend"
-      );
-      return { ...f, shifts: [...weekendIds, shiftId] };
+      const next = current.includes(shiftId)
+        ? current.filter((id) => id !== shiftId)
+        : [...current, shiftId];
+      return { ...f, shifts: next };
     });
   }
 
@@ -149,12 +134,14 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
           <Field
             label="Tipo de escala"
             hint={
-              isOvertime
+              scaleType === "overtime"
                 ? "Hora extra não entra nas regras de inconsistência, mas conta na necessidade de pessoas."
-                : "Escala regular entra nas regras de inconsistência e na necessidade de pessoas."
+                : scaleType === "plantao"
+                  ? "Plantão não entra nas regras de inconsistência, mas conta na necessidade de pessoas."
+                  : "Escala regular entra nas regras de inconsistência e na necessidade de pessoas."
             }
           >
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {SCALE_TYPE_OPTIONS.map((option) => (
                 <button
                   key={option.id}
@@ -175,9 +162,9 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
           <Field
             label="Turno"
             hint={
-              isOvertime
-                ? "Hora extra pode coexistir com outro turno regular no mesmo dia útil."
-                : "Turnos de seg–sex: um por escala. Sábado, domingo e feriados: pode selecionar mais de um."
+              isNonRegular
+                ? "Plantão e hora extra podem coexistir com escala regular da mesma pessoa no mesmo dia."
+                : "Vários turnos podem valer no mesmo dia (ex.: regular e plantão no domingo). Cada pessoa só pode ter uma escala regular por dia."
             }
           >
             <div className="grid grid-cols-3 gap-2">
@@ -315,19 +302,17 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
           {rec.type === "weekly" && (
             <div className="grid grid-cols-2 gap-3">
               <Field label="Início (opcional)" hint="Vazio = vale em todo o período visível">
-                <input
-                  type="date"
-                  className={inputClass}
+                <ClearableDateInput
                   value={form.startDate || ""}
                   onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                  clearLabel="Limpar data de início"
                 />
               </Field>
               <Field label="Fim (opcional)" hint="Vazio = sem data de término">
-                <input
-                  type="date"
-                  className={inputClass}
+                <ClearableDateInput
                   value={form.endDate || ""}
                   onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                  clearLabel="Limpar data de fim"
                 />
               </Field>
             </div>

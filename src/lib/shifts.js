@@ -1,25 +1,22 @@
+import { WEEKDAY_LABELS } from "./constants";
+
+/** @deprecated Use weekdays + appliesOnHolidays. Mantido para migração. */
 export const SHIFT_SCOPES = {
   weekday: { id: "weekday", label: "Segunda a sexta" },
   weekend: { id: "weekend", label: "Sábado, domingo e feriados" },
 };
 
+export const DEFAULT_WEEKDAYS = [1, 2, 3, 4, 5];
+export const DEFAULT_WEEKEND_DAYS = [0, 6];
+
 export const DEFAULT_SHIFTS = [
-  { id: "manha", label: "Manhã", start: "06:00", end: "12:00", scope: "weekday" },
-  { id: "tarde", label: "Tarde", start: "12:00", end: "18:00", scope: "weekday" },
-  { id: "noite", label: "Noite", start: "18:00", end: "00:00", scope: "weekday" },
   {
-    id: "fds_manha",
-    label: "FDS/Feriado · Manhã",
+    id: "turno_1",
+    label: "Turno 1",
     start: "08:00",
-    end: "14:00",
-    scope: "weekend",
-  },
-  {
-    id: "fds_noite",
-    label: "FDS/Feriado · Noite",
-    start: "18:00",
-    end: "00:00",
-    scope: "weekend",
+    end: "18:00",
+    weekdays: DEFAULT_WEEKDAYS,
+    appliesOnHolidays: false,
   },
 ];
 
@@ -46,19 +43,50 @@ const SHIFT_PALETTE = [
 ];
 
 const DEFAULT_VISUAL_INDEX = {
-  manha: 0,
-  tarde: 1,
-  noite: 2,
-  fds_manha: 3,
-  fds_noite: 4,
+  turno_1: 0,
 };
 
 function isValidTime(value) {
   return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
-function isValidScope(value) {
-  return value === "weekday" || value === "weekend";
+function scopeToWeekdayConfig(scope) {
+  if (scope === "weekend") {
+    return { weekdays: [...DEFAULT_WEEKEND_DAYS], appliesOnHolidays: true };
+  }
+  return { weekdays: [...DEFAULT_WEEKDAYS], appliesOnHolidays: false };
+}
+
+export function normalizeShiftWeekdays(rawWeekdays, fallbackWeekdays = DEFAULT_WEEKDAYS) {
+  if (!Array.isArray(rawWeekdays)) return [...fallbackWeekdays];
+
+  const normalized = [...new Set(rawWeekdays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+  normalized.sort((a, b) => a - b);
+  return normalized.length > 0 ? normalized : [...fallbackWeekdays];
+}
+
+function resolveShiftWeekdayConfig(raw, defaults) {
+  if (Array.isArray(raw?.weekdays)) {
+    return {
+      weekdays: normalizeShiftWeekdays(raw.weekdays, defaults.weekdays),
+      appliesOnHolidays: Boolean(raw.appliesOnHolidays),
+    };
+  }
+
+  if (raw?.scope === "weekday" || raw?.scope === "weekend") {
+    return scopeToWeekdayConfig(raw.scope);
+  }
+
+  if (defaults.weekdays || defaults.scope) {
+    return defaults.weekdays
+      ? {
+          weekdays: normalizeShiftWeekdays(defaults.weekdays),
+          appliesOnHolidays: Boolean(defaults.appliesOnHolidays),
+        }
+      : scopeToWeekdayConfig(defaults.scope);
+  }
+
+  return { weekdays: [...DEFAULT_WEEKDAYS], appliesOnHolidays: false };
 }
 
 function generateShort(label) {
@@ -76,6 +104,49 @@ export function formatShiftTime({ start, end }) {
   return `${start}–${end}`;
 }
 
+function arraysEqual(a, b) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+export function formatShiftWeekdaysLabel(shift) {
+  const weekdays = normalizeShiftWeekdays(shift?.weekdays, []);
+  const parts = [];
+
+  if (weekdays.length === 5 && arraysEqual(weekdays, DEFAULT_WEEKDAYS)) {
+    parts.push("Seg–Sex");
+  } else if (weekdays.length === 2 && arraysEqual(weekdays, DEFAULT_WEEKEND_DAYS)) {
+    parts.push("Sáb e Dom");
+  } else if (weekdays.length > 0) {
+    parts.push(weekdays.map((day) => WEEKDAY_LABELS[day]).join(", "));
+  }
+
+  if (shift?.appliesOnHolidays) parts.push("Feriados");
+
+  return parts.join(" · ") || "—";
+}
+
+export function shiftsShareApplicableDay(shiftA, shiftB) {
+  if (!shiftA || !shiftB) return false;
+  if (shiftA.appliesOnHolidays && shiftB.appliesOnHolidays) return true;
+
+  const daysA = normalizeShiftWeekdays(shiftA.weekdays, []);
+  const daysB = normalizeShiftWeekdays(shiftB.weekdays, []);
+  return daysA.some((day) => daysB.includes(day));
+}
+
+export function shiftAppliesOnNeedDay(shift, dayIndex, feriadoDayIndex = 7) {
+  if (!shift) return false;
+  if (dayIndex === feriadoDayIndex) return Boolean(shift.appliesOnHolidays);
+  return normalizeShiftWeekdays(shift.weekdays, []).includes(dayIndex);
+}
+
+export function shiftAppliesOnDate(shift, dateISO, holidays = [], feriadoDayIndex = 7) {
+  if (!shift || typeof dateISO !== "string") return false;
+  if (holidays.includes(dateISO)) return Boolean(shift.appliesOnHolidays);
+  const dayIndex = new Date(`${dateISO}T00:00:00`).getDay();
+  return shiftAppliesOnNeedDay(shift, dayIndex, feriadoDayIndex);
+}
+
 function normalizeShiftItem(raw, fallbackIndex = 0) {
   const defaults = DEFAULT_SHIFTS[fallbackIndex] ?? DEFAULT_SHIFTS[0];
   const id =
@@ -86,9 +157,9 @@ function normalizeShiftItem(raw, fallbackIndex = 0) {
     typeof raw?.label === "string" && raw.label.trim() ? raw.label.trim() : defaults.label;
   const start = isValidTime(raw?.start) ? raw.start : defaults.start;
   const end = isValidTime(raw?.end) ? raw.end : defaults.end;
-  const scope = isValidScope(raw?.scope) ? raw.scope : defaults.scope;
+  const { weekdays, appliesOnHolidays } = resolveShiftWeekdayConfig(raw, defaults);
 
-  return { id, label, start, end, scope };
+  return { id, label, start, end, weekdays, appliesOnHolidays };
 }
 
 export function normalizeShifts(rawShifts, legacyShiftTimes) {
@@ -133,13 +204,15 @@ export function normalizeShiftTimes(raw) {
 function enrichShift(shift, index) {
   const paletteIndex = DEFAULT_VISUAL_INDEX[shift.id] ?? index % SHIFT_PALETTE.length;
   const visual = SHIFT_PALETTE[paletteIndex];
+  const weekdaysLabel = formatShiftWeekdaysLabel(shift);
 
   return {
     ...shift,
     ...visual,
     short: generateShort(shift.label),
     time: formatShiftTime(shift),
-    scopeLabel: SHIFT_SCOPES[shift.scope]?.label ?? "",
+    weekdaysLabel,
+    scopeLabel: weekdaysLabel,
   };
 }
 
@@ -163,6 +236,13 @@ export function sortShiftIds(shiftIds, shiftsConfig = DEFAULT_SHIFTS) {
   return order.filter((id) => shiftIds.includes(id));
 }
 
+function shiftWeekdayConfigMatches(defaults, current) {
+  return (
+    arraysEqual(normalizeShiftWeekdays(current.weekdays, []), normalizeShiftWeekdays(defaults.weekdays, [])) &&
+    Boolean(current.appliesOnHolidays) === Boolean(defaults.appliesOnHolidays)
+  );
+}
+
 export function isDefaultShifts(shifts) {
   const normalized = normalizeShifts(shifts);
   if (normalized.length !== DEFAULT_SHIFTS.length) return false;
@@ -174,7 +254,7 @@ export function isDefaultShifts(shifts) {
       current.label === defaults.label &&
       current.start === defaults.start &&
       current.end === defaults.end &&
-      current.scope === defaults.scope
+      shiftWeekdayConfigMatches(defaults, current)
     );
   });
 }
@@ -185,11 +265,20 @@ export function createEmptyShift() {
     label: "",
     start: "08:00",
     end: "16:00",
-    scope: "weekday",
+    weekdays: [],
+    appliesOnHolidays: false,
   };
 }
 
 export function countRulesUsingShift(rules, shiftId) {
   if (!Array.isArray(rules)) return 0;
   return rules.filter((rule) => Array.isArray(rule.shifts) && rule.shifts.includes(shiftId)).length;
+}
+
+export function validateShiftWeekdayConfig(weekdays, appliesOnHolidays) {
+  const normalized = normalizeShiftWeekdays(weekdays, []);
+  if (normalized.length === 0 && !appliesOnHolidays) {
+    return { ok: false, error: "Selecione ao menos um dia da semana ou feriados." };
+  }
+  return { ok: true, weekdays: normalized, appliesOnHolidays: Boolean(appliesOnHolidays) };
 }

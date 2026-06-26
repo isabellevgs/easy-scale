@@ -123,9 +123,8 @@ export default function WorkloadSummaryPage({ people, rules, holidays = [] }) {
 
       <p className="mt-4 text-[12px] text-ink-faint">
         Semanas começam na segunda-feira. Quando a semana cruza meses, só entram os dias do mês
-        selecionado. Hora extra e turnos de sábado, domingo e feriados são corridos, sem desconto
-        de intervalo. Em turnos regulares de seg–sex, o intervalo da pessoa é descontado uma vez por
-        dia escalado.
+        selecionado. Plantão e hora extra são corridos, sem desconto de intervalo. Em cada escala
+        regular, o intervalo da pessoa é descontado da jornada daquele turno.
       </p>
     </PageContainer>
   );

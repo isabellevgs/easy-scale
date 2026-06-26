@@ -1,4 +1,4 @@
-import { getShiftIds, normalizeShifts } from "./shifts";
+import { getShiftIds, normalizeShifts, shiftAppliesOnNeedDay } from "./shifts";
 
 /** Índices 0–6 = dom–sáb; 7 = template de feriado. */
 export const FERIADO_DAY_INDEX = 7;
@@ -7,25 +7,13 @@ export const NEED_DAY_COUNT = 8;
 /** Ordem de exibição na tabela de necessidade: seg–sáb–dom–feriado. */
 export const NEED_DAY_DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0, FERIADO_DAY_INDEX];
 
-export const WEEKEND_DAYS = new Set([0, 6]);
-
-function isWeekdayRow(dayIndex) {
-  return dayIndex >= 1 && dayIndex <= 5;
-}
-
-function isWeekendOrFeriadoRow(dayIndex) {
-  return dayIndex === FERIADO_DAY_INDEX || WEEKEND_DAYS.has(dayIndex);
-}
-
-function getShiftScope(shiftId, shiftsById) {
-  return shiftsById?.[shiftId]?.scope ?? null;
+function getShiftWeekdayConfig(shiftId, shiftsById) {
+  return shiftsById?.[shiftId] ?? null;
 }
 
 export function isShiftNeedEditable(dayIndex, shiftId, shiftsById = {}) {
-  const scope = getShiftScope(shiftId, shiftsById);
-  if (scope === "weekday") return isWeekdayRow(dayIndex);
-  if (scope === "weekend") return isWeekendOrFeriadoRow(dayIndex);
-  return true;
+  const shift = getShiftWeekdayConfig(shiftId, shiftsById);
+  return shiftAppliesOnNeedDay(shift, dayIndex, FERIADO_DAY_INDEX);
 }
 
 export function getApplicableShiftIdsForDate(dateISO, shiftIds, holidays = [], shiftsById = {}) {
@@ -35,11 +23,9 @@ export function getApplicableShiftIdsForDate(dateISO, shiftIds, holidays = [], s
 
 export function shiftNeedDisabledReason(dayIndex, shiftId, shiftsById = {}) {
   if (isShiftNeedEditable(dayIndex, shiftId, shiftsById)) return "";
-  const scope = getShiftScope(shiftId, shiftsById);
-  if (scope === "weekday") {
-    return "Turnos de segunda a sexta só têm meta nesses dias";
-  }
-  return "Turnos de fim de semana/feriado só têm meta nesses dias e na linha Feriado";
+  const shift = getShiftWeekdayConfig(shiftId, shiftsById);
+  const label = shift?.label ?? "Turno";
+  return `${label} não se aplica a este dia`;
 }
 
 export function normalizeHolidays(raw) {

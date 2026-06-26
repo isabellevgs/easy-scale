@@ -76,9 +76,9 @@ function ShiftRowLabel({ shift, compact = false }) {
       <p className={`mt-1 leading-snug text-ink-faint ${compact ? "text-[11px]" : "text-[11px]"}`}>
         {shift.time}
       </p>
-      {!compact && shift.scopeLabel && (
+      {!compact && shift.weekdaysLabel && (
         <p className="mt-0.5 hidden text-[10px] leading-snug text-ink-faint lg:block">
-          {shift.scopeLabel}
+          {shift.weekdaysLabel}
         </p>
       )}
     </div>

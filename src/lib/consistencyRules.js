@@ -82,6 +82,15 @@ function normalizePersonIds(raw) {
   return [...new Set(raw.filter((id) => typeof id === "string" && id.trim()))];
 }
 
+function resolvePersonIds(raw) {
+  const ids = normalizePersonIds(raw?.personIds);
+  if (ids.length > 0) return ids;
+  if (Array.isArray(raw?.people)) {
+    return normalizePersonIds(raw.people.map((person) => person?.id));
+  }
+  return [];
+}
+
 function normalizeRuleItem(raw, shiftIds, fallbackId) {
   const type = isValidRuleType(raw?.type) ? raw.type : CONSISTENCY_RULE_TYPES.SHIFT_PER_WEEK;
   const expectedCount = Math.max(
@@ -92,7 +101,7 @@ function normalizeRuleItem(raw, shiftIds, fallbackId) {
     typeof raw?.id === "string" && raw.id.trim() ? raw.id.trim() : fallbackId;
 
   if (type === CONSISTENCY_RULE_TYPES.DAYS_OFF_PER_WEEK) {
-    return { id, type, expectedCount, personIds: normalizePersonIds(raw?.personIds) };
+    return { id, type, expectedCount, personIds: resolvePersonIds(raw) };
   }
 
   return {
@@ -100,7 +109,7 @@ function normalizeRuleItem(raw, shiftIds, fallbackId) {
     type,
     expectedCount,
     shiftId: resolveShiftId(raw?.shiftId, shiftIds),
-    personIds: normalizePersonIds(raw?.personIds),
+    personIds: resolvePersonIds(raw),
   };
 }
 

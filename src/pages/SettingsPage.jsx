@@ -139,7 +139,8 @@ export default function SettingsPage({
         label: shift.label,
         start: shift.start,
         end: shift.end,
-        scope: shift.scope,
+        weekdays: shift.weekdays,
+        appliesOnHolidays: shift.appliesOnHolidays,
       },
     });
   }
@@ -334,7 +335,7 @@ export default function SettingsPage({
                 <div className="min-w-0">
                   <p className="text-[15px] font-medium text-ink">{shift.label}</p>
                   <p className="text-[12px] text-ink-faint">
-                    {shift.time} · {shift.scopeLabel}
+                    {shift.time} · {shift.weekdaysLabel}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">

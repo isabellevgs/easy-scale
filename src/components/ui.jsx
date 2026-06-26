@@ -1,4 +1,5 @@
 import { cloneElement, isValidElement, useId } from "react";
+import { X } from "lucide-react";
 import { useShifts } from "../hooks/useShifts";
 
 export function ShiftBadge({ shiftId, size = "md", count }) {
@@ -94,11 +95,13 @@ export function Modal({
   width = "max-w-md",
   contentClassName = "",
   footerClassName = "",
+  zIndex = 50,
 }) {
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 overflow-y-auto bg-black/60 p-4"
+      style={{ zIndex }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -157,3 +160,33 @@ export function Field({ label, children, hint, htmlFor }) {
 
 export const inputClass =
   "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-[14px] text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none";
+
+export function ClearableDateInput({
+  value,
+  onChange,
+  className = "",
+  clearLabel = "Limpar data",
+  ...props
+}) {
+  return (
+    <div className="relative">
+      <input
+        type="date"
+        className={`${inputClass} ${value ? "pr-9" : ""} ${className}`}
+        value={value || ""}
+        onChange={onChange}
+        {...props}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange({ target: { value: "" } })}
+          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+          aria-label={clearLabel}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </div>
+  );
+}

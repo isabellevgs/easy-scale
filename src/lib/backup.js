@@ -96,6 +96,7 @@ export function describeBackupContents(state) {
     rules: data.rules.length,
     shifts: data.shifts.length,
     holidays: data.holidays.length,
+    includesShiftNeeds: Array.isArray(data.shiftNeeds) && data.shiftNeeds.length > 0,
     consistencyRulesWithPeople: countConsistencyRulesWithPeople(data.consistencyRules),
     consistencyRuleLinks: countConsistencyRuleLinks(data.consistencyRules),
   };

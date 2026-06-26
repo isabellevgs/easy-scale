@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Repeat } from "lucide-react";
-import { Modal, PersonAvatar, IconButton } from "./ui";
+import { Modal, PersonAvatar, IconButton, Button } from "./ui";
 import ShiftRecurrenceModal from "./ShiftRecurrenceModal";
 import { colorForPerson, peopleScheduledIn, sortPeopleByName } from "../lib/constants";
 import {
@@ -12,8 +12,12 @@ import {
 } from "../lib/shiftNeeds";
 import { getOccurrences, describePersonScaleOverlap } from "../lib/schedule";
 import PersonScaleOverlapIcon from "./PersonScaleOverlapIcon";
-import { isPersonShiftRecurring, togglePersonShiftOnDate } from "../lib/scheduleToggle";
-import { requiresSingleShiftPerPerson } from "../lib/scheduleValidation";
+import {
+  isPersonShiftRecurring,
+  removePersonShiftOnDate,
+  schedulePersonOnShiftDate,
+  UNSCHEDULE_SCOPE,
+} from "../lib/scheduleToggle";
 import { usePersist } from "../hooks/usePersist";
 import { useShifts } from "../hooks/useShifts";
 
@@ -34,6 +38,7 @@ export default function ShiftStaffingPeopleModal({
   const { shiftsById } = useShifts();
   const { persist } = usePersist();
   const [recurrencePerson, setRecurrencePerson] = useState(null);
+  const [removeConfirmPerson, setRemoveConfirmPerson] = useState(null);
 
   const dayOccurrences = useMemo(() => {
     if (!open || !dateISO) return [];
@@ -67,28 +72,62 @@ export default function ShiftStaffingPeopleModal({
 
   if (!shift) return null;
 
-  const enforceSingleShift = requiresSingleShiftPerPerson(dateISO, holidays);
   const scheduled = countScheduledPeopleForShift(dayOccurrences, shift.id);
   const status = getStaffingStatus(required, scheduled);
   const styles = staffingStatusStyles(status);
   const detail = staffingStatusLabel(status, required, scheduled);
 
-  function handleToggle(personId) {
+  function handlePersonClick(personId) {
     if (!dateISO || !shift) return;
+
+    if (scheduledIds.has(personId)) {
+      const person = allPeople.find((item) => item.id === personId);
+      if (person) setRemoveConfirmPerson(person);
+      return;
+    }
 
     persist(
       () =>
-        togglePersonShiftOnDate(
-          { rules, addRule, updateRule, removeRule, holidays, shiftsById },
-          { personId, shiftId: shift.id, dateISO }
-        ),
-      scheduledIds.has(personId) ? "Removido do turno." : "Adicionado ao turno.",
+        schedulePersonOnShiftDate({
+          addRule,
+          rules,
+          personId,
+          shiftId: shift.id,
+          dateISO,
+          holidays,
+          shiftsById,
+        }),
+      "Adicionado ao turno.",
       "Não foi possível atualizar a escala."
     );
   }
 
+  function handleRemove(scope) {
+    if (!removeConfirmPerson || !dateISO || !shift) return;
+
+    const messages = {
+      [UNSCHEDULE_SCOPE.DAY]: "Removido deste dia.",
+      [UNSCHEDULE_SCOPE.FUTURE]: "Removido deste dia em diante.",
+      [UNSCHEDULE_SCOPE.ALL]: "Escala removida.",
+    };
+
+    persist(
+      () =>
+        removePersonShiftOnDate(
+          { rules, addRule, updateRule, removeRule, holidays },
+          { personId: removeConfirmPerson.id, shiftId: shift.id, dateISO },
+          scope
+        ),
+      messages[scope],
+      "Não foi possível atualizar a escala."
+    ).then((result) => {
+      if (result?.ok) setRemoveConfirmPerson(null);
+    });
+  }
+
   function handleClose() {
     setRecurrencePerson(null);
+    setRemoveConfirmPerson(null);
     onClose();
   }
 
@@ -103,9 +142,8 @@ export default function ShiftStaffingPeopleModal({
         </div>
 
         <p className="mt-4 text-[13px] text-ink-soft">
-          {enforceSingleShift
-            ? "Selecione quem trabalha neste turno. Em dias úteis (seg–sex), o aviso amarelo indica quem já está em outro turno."
-            : "Selecione quem trabalha neste turno. Fins de semana e feriados permitem mais de um turno por pessoa."}
+          Selecione quem trabalha neste turno. Vários turnos podem existir no mesmo dia (ex.: regular
+          e plantão no domingo). O aviso amarelo indica quem já está em outro turno regular neste dia.
         </p>
 
         {allPeople.length === 0 ? (
@@ -122,8 +160,7 @@ export default function ShiftStaffingPeopleModal({
               const selected = scheduledIds.has(person.id);
               const otherShiftId = otherShiftByPerson.get(person.id);
               const otherShiftLabel = otherShiftId ? shiftsById[otherShiftId]?.label : null;
-              const showOtherShiftWarning =
-                enforceSingleShift && !selected && Boolean(otherShiftLabel);
+              const showOtherShiftWarning = !selected && Boolean(otherShiftLabel);
               const personColor = colorForPerson(person.id, allPeople);
               const overlapLabel = describePersonScaleOverlap(shiftOccs, person.id);
               const hasScaleOverlap = Boolean(overlapLabel);
@@ -147,7 +184,7 @@ export default function ShiftStaffingPeopleModal({
                 >
                   <button
                     type="button"
-                    onClick={() => handleToggle(person.id)}
+                    onClick={() => handlePersonClick(person.id)}
                     className={`flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                       selected ? "pr-2 hover:bg-brand-soft/35" : "hover:bg-surface-2"
                     } ${selected && !hasScaleOverlap ? "pr-11" : ""} ${
@@ -203,6 +240,54 @@ export default function ShiftStaffingPeopleModal({
             })}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!removeConfirmPerson}
+        onClose={() => setRemoveConfirmPerson(null)}
+        title="Remover da escala"
+        width="max-w-sm"
+        zIndex={60}
+      >
+        <p className="text-[14px] text-ink-soft">
+          Remover <strong className="text-ink">{removeConfirmPerson?.nome}</strong> de{" "}
+          {shift.label} · {dateLabel}?
+        </p>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-start"
+            onClick={() => handleRemove(UNSCHEDULE_SCOPE.DAY)}
+          >
+            Excluir apenas esse dia
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-start"
+            onClick={() => handleRemove(UNSCHEDULE_SCOPE.FUTURE)}
+          >
+            Excluir todos os futuros
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            className="w-full justify-start"
+            onClick={() => handleRemove(UNSCHEDULE_SCOPE.ALL)}
+          >
+            Excluir toda escala
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full justify-center"
+            onClick={() => setRemoveConfirmPerson(null)}
+          >
+            Cancelar
+          </Button>
+        </div>
       </Modal>
 
       <ShiftRecurrenceModal

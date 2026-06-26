@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 
-const DEFAULT_TITLE = "Regular e hora extra no mesmo turno neste dia";
+const DEFAULT_TITLE = "Mais de um tipo de escala no mesmo turno neste dia";
 
 export default function PersonScaleOverlapIcon({
   className = "h-3.5 w-3.5 shrink-0 text-amber-500",

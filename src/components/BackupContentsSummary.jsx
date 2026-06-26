@@ -15,6 +15,14 @@ export default function BackupContentsSummary({ summary }) {
       <span className="font-medium text-ink">
         {summary.shifts} turno{summary.shifts !== 1 ? "s" : ""}
       </span>
+      {summary.holidays > 0 && (
+        <>
+          ,{" "}
+          <span className="font-medium text-ink">
+            {summary.holidays} feriado{summary.holidays !== 1 ? "s" : ""}
+          </span>
+        </>
+      )}
       {summary.consistencyRuleLinks > 0 && (
         <>
           ,{" "}
@@ -24,6 +32,12 @@ export default function BackupContentsSummary({ summary }) {
             {summary.consistencyRuleLinks} vínculo
             {summary.consistencyRuleLinks !== 1 ? "s" : ""})
           </span>
+        </>
+      )}
+      {summary.includesShiftNeeds && (
+        <>
+          {" "}
+          e necessidade por turno
         </>
       )}
       .

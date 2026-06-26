@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import { resolveConsistencyRules } from "./consistencyRules";
 import { getShiftIds } from "./shifts";
+import { normalizeScheduleRules } from "./rules";
 
 const STORAGE_KEY = "easyscale:v1";
 
@@ -59,7 +60,7 @@ export function normalizeState(parsed) {
 
   return {
     people,
-    rules: Array.isArray(parsed.rules) ? parsed.rules : [],
+    rules: normalizeScheduleRules(parsed.rules, shiftIds),
     shifts,
     shiftNeeds: normalizeShiftNeedsForShifts(parsed.shiftNeeds, shifts),
     holidays: normalizeHolidays(parsed.holidays),

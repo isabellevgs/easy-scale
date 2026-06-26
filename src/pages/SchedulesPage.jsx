@@ -18,7 +18,7 @@ import { colorForPerson } from "../lib/constants";
 import { sortShiftIds } from "../lib/shifts";
 import { validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
 import { usePersist } from "../hooks/usePersist";
-import { describeScaleType, SCALE_TYPES } from "../lib/rules";
+import { describeScaleType, scaleTypeBadge } from "../lib/rules";
 import PageContainer from "../components/PageContainer";
 
 const RECURRENCE_TYPES = [
@@ -510,6 +510,7 @@ function RuleListItem({ rule, person, people, expired = false, scheduled = false
   if (!person) return null;
 
   const muted = expired || scheduled;
+  const badge = scaleTypeBadge(rule.scaleType);
 
   return (
     <div
@@ -521,9 +522,11 @@ function RuleListItem({ rule, person, people, expired = false, scheduled = false
           <p className={`text-[14px] font-medium ${muted ? "text-ink-soft" : "text-ink"}`}>
             {person.nome}
           </p>
-          {rule.scaleType === SCALE_TYPES.OVERTIME && (
-            <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
-              Hora extra
+          {badge && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}
+            >
+              {badge.label}
             </span>
           )}
           {scheduled && (
