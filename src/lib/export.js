@@ -51,8 +51,20 @@ function injectExportStyles(clonedDoc) {
     .export-capture--rendering .week-needs-mobile {
       display: none !important;
     }
-    .export-capture--rendering .week-schedule-table-wrap {
+    .export-capture--rendering .week-schedule-table-wrap,
+    .export-capture--rendering .export-table-wrap {
       display: block !important;
+      overflow: visible !important;
+    }
+    .export-capture--rendering .export-week-table {
+      min-width: 100% !important;
+    }
+    .export-capture--rendering .sticky {
+      position: static !important;
+      box-shadow: none !important;
+    }
+    .export-capture--rendering .pointer-events-none {
+      pointer-events: auto !important;
     }
   `;
   clonedDoc.head.appendChild(style);

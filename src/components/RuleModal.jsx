@@ -163,8 +163,8 @@ export default function RuleModal({ open, people, initial, onClose, onSave }) {
             label="Turno"
             hint={
               isNonRegular
-                ? "Plantão e hora extra podem coexistir com escala regular da mesma pessoa no mesmo dia."
-                : "Vários turnos podem valer no mesmo dia (ex.: regular e plantão no domingo). Cada pessoa só pode ter uma escala regular por dia."
+                ? "Plantão e hora extra podem coexistir entre si no mesmo dia (incluindo duas horas extras ou dois plantões). Não podem ser combinados com escala regular."
+                : "Cada pessoa só pode ter uma escala regular por dia. Hora extra pode coexistir (inclusive em mais de um turno); plantão e segunda escala regular não."
             }
           >
             <div className="grid grid-cols-3 gap-2">

@@ -68,6 +68,9 @@ export default function MonthPage({
   const rangeStart = toISODate(gridStart);
   const rangeEnd = toISODate(gridEnd);
 
+  const monthRangeStart = toISODate(monthStart);
+  const monthRangeEnd = toISODate(monthEnd);
+
   const occurrences = useMemo(
     () => getOccurrences(rules, rangeStart, rangeEnd, holidays),
     [rules, rangeStart, rangeEnd, holidays]
@@ -132,6 +135,16 @@ export default function MonthPage({
             targetRef={exportRef}
             filenameBase={`escala-mes-${format(baseMonth, "yyyy-MM")}`}
             title={`Escala mensal · ${monthLabel}`}
+            disabled={people.length === 0}
+            calendarExport={{
+              occurrences,
+              people,
+              shiftsById,
+              filename: `escala-mes-${format(baseMonth, "yyyy-MM")}.ics`,
+              calendarName: `EasyScale · ${monthLabel}`,
+              rangeStartISO: monthRangeStart,
+              rangeEndISO: monthRangeEnd,
+            }}
           />
         </div>
       </div>

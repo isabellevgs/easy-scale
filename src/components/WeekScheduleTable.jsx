@@ -324,12 +324,11 @@ export default function WeekScheduleTable({
   const isNeedsView = viewMode === SCHEDULE_VIEW.NEEDS;
 
   const tableWrapClass = isNeedsView
-    ? "week-schedule-table-wrap hidden sm:block"
-    : "overflow-x-auto overscroll-x-contain";
+    ? "week-schedule-table-wrap export-table-wrap hidden sm:block"
+    : "export-table-wrap";
 
-  const scrollWrapClass = isNeedsView
-    ? "overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
-    : "overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]";
+  const scrollWrapClass =
+    "overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]";
 
   return (
     <Card className="overflow-hidden p-0">
@@ -347,7 +346,7 @@ export default function WeekScheduleTable({
         />
       )}
 
-      <div className={isNeedsView ? `${tableWrapClass} ${scrollWrapClass}` : scrollWrapClass}>
+      <div className={`${tableWrapClass} ${scrollWrapClass}`}>
         <table
           className={`export-week-table w-full border-collapse text-left ${
             isNeedsView

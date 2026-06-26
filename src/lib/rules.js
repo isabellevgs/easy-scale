@@ -29,6 +29,19 @@ export function isNonRegularScaleType(value) {
   return !isRegularScaleType(value);
 }
 
+/** Combinações permitidas no mesmo dia: regular+hora extra, plantão+plantão, plantão+hora extra, hora extra+hora extra. */
+export function canCombineScaleTypesOnSameDay(scaleTypeA, scaleTypeB) {
+  const a = normalizeScaleType(scaleTypeA);
+  const b = normalizeScaleType(scaleTypeB);
+
+  if (a === b) return a !== SCALE_TYPES.REGULAR;
+
+  if (a === SCALE_TYPES.REGULAR && b === SCALE_TYPES.PLANTAO) return false;
+  if (a === SCALE_TYPES.PLANTAO && b === SCALE_TYPES.REGULAR) return false;
+
+  return true;
+}
+
 export function scaleTypeBadge(scaleType) {
   const normalized = normalizeScaleType(scaleType);
   if (normalized === SCALE_TYPES.OVERTIME) {

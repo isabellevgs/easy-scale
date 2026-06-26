@@ -73,7 +73,9 @@ export default function WeekPage({
   )}`;
   const rangeLabel = rangeLabelRaw.replace(/(^|– )([a-z])/g, (m, sep, c) => sep + c.toUpperCase());
   const exportSubtitle =
-    viewMode === SCHEDULE_VIEW.NEEDS ? "Escala semanal · Necessidade" : "Escala semanal";
+    viewMode === SCHEDULE_VIEW.NEEDS
+      ? "Escala semanal · Necessidade"
+      : "Escala semanal · Pessoas";
   const monthKeys = useMemo(
     () => [...new Set(days.map((day) => format(day, "yyyy-MM")))],
     [days]
@@ -159,6 +161,14 @@ export default function WeekPage({
             targetRef={exportRef}
             filenameBase={`escala-semana-${rangeStart}`}
             title={`Escala semanal · ${rangeLabel}`}
+            disabled={people.length === 0}
+            calendarExport={{
+              occurrences: filteredOccurrences,
+              people,
+              shiftsById,
+              filename: `escala-semana-${rangeStart}.ics`,
+              calendarName: `EasyScale · ${rangeLabel}`,
+            }}
           />
         </div>
         <Button onClick={openNew} disabled={people.length === 0}>

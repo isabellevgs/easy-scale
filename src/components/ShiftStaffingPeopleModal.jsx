@@ -18,6 +18,8 @@ import {
   schedulePersonOnShiftDate,
   UNSCHEDULE_SCOPE,
 } from "../lib/scheduleToggle";
+import { findConflictingShiftForPerson } from "../lib/scheduleValidation";
+import { SCALE_TYPES } from "../lib/rules";
 import { usePersist } from "../hooks/usePersist";
 import { useShifts } from "../hooks/useShifts";
 
@@ -60,15 +62,19 @@ export default function ShiftStaffingPeopleModal({
     [scheduledPeople]
   );
 
-  const otherShiftByPerson = useMemo(() => {
+  const conflictingShiftByPerson = useMemo(() => {
     if (!shift) return new Map();
     const map = new Map();
-    for (const occ of dayOccurrences) {
-      if (occ.shift === shift.id) continue;
-      map.set(occ.personId, occ.shift);
+    for (const person of allPeople) {
+      const conflictShiftId = findConflictingShiftForPerson(dayOccurrences, {
+        personId: person.id,
+        shiftId: shift.id,
+        scaleType: SCALE_TYPES.REGULAR,
+      });
+      if (conflictShiftId) map.set(person.id, conflictShiftId);
     }
     return map;
-  }, [dayOccurrences, shift]);
+  }, [dayOccurrences, shift, allPeople]);
 
   if (!shift) return null;
 
@@ -142,8 +148,9 @@ export default function ShiftStaffingPeopleModal({
         </div>
 
         <p className="mt-4 text-[13px] text-ink-soft">
-          Selecione quem trabalha neste turno. Vários turnos podem existir no mesmo dia (ex.: regular
-          e plantão no domingo). O aviso amarelo indica quem já está em outro turno regular neste dia.
+          Selecione quem trabalha neste turno. No mesmo dia, é permitido combinar regular com hora
+          extra, plantão com plantão, plantão com hora extra ou hora extra com hora extra. O aviso
+          amarelo indica quem já está escalado(a) de forma incompatível neste dia.
         </p>
 
         {allPeople.length === 0 ? (
@@ -158,7 +165,7 @@ export default function ShiftStaffingPeopleModal({
           <div className="mt-3 max-h-[min(420px,55vh)] space-y-1.5 overflow-y-auto pr-0.5">
             {sortPeopleByName(allPeople).map((person) => {
               const selected = scheduledIds.has(person.id);
-              const otherShiftId = otherShiftByPerson.get(person.id);
+              const otherShiftId = conflictingShiftByPerson.get(person.id);
               const otherShiftLabel = otherShiftId ? shiftsById[otherShiftId]?.label : null;
               const showOtherShiftWarning = !selected && Boolean(otherShiftLabel);
               const personColor = colorForPerson(person.id, allPeople);

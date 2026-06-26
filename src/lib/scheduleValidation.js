@@ -1,6 +1,11 @@
 import { addYears, format, parseISO } from "date-fns";
-import { getOccurrences, isRegularOccurrence, toISODate } from "./schedule";
-import { normalizeScaleType, SCALE_TYPES } from "./rules";
+import { getOccurrences, toISODate } from "./schedule";
+import {
+  canCombineScaleTypesOnSameDay,
+  describeScaleType,
+  normalizeScaleType,
+  SCALE_TYPES,
+} from "./rules";
 import { getLastCustomOccurrenceDate } from "./customRecurrence";
 
 function shiftLabel(shiftsById, shiftId) {
@@ -23,25 +28,36 @@ export function requiresSingleShiftPerPerson(_dateISO, _holidays = []) {
   return true;
 }
 
+export function findConflictingShiftForPerson(
+  dayOccurrences,
+  { personId, shiftId, scaleType = SCALE_TYPES.REGULAR }
+) {
+  const candidateType = normalizeScaleType(scaleType);
+
+  for (const occ of dayOccurrences || []) {
+    if (occ.personId !== personId || occ.shift === shiftId) continue;
+    if (!canCombineScaleTypesOnSameDay(candidateType, occ.scaleType)) {
+      return occ.shift;
+    }
+  }
+
+  return null;
+}
+
 export function getPersonOtherShiftOnDate(
   rules,
-  { personId, shiftId, dateISO },
+  { personId, shiftId, dateISO, scaleType = SCALE_TYPES.REGULAR },
   holidays = []
 ) {
   if (!requiresSingleShiftPerPerson(dateISO, holidays)) return null;
 
   const occurrences = getOccurrences(rules, dateISO, dateISO, holidays);
-  return (
-    occurrences.find(
-      (occ) =>
-        isRegularOccurrence(occ) && occ.personId === personId && occ.shift !== shiftId
-    )?.shift ?? null
-  );
+  return findConflictingShiftForPerson(occurrences, { personId, shiftId, scaleType });
 }
 
 export function validatePersonCanJoinShiftOnDate(
   rules,
-  { personId, shiftId, dateISO },
+  { personId, shiftId, dateISO, scaleType = SCALE_TYPES.REGULAR },
   holidays = [],
   shiftsById = {}
 ) {
@@ -49,8 +65,35 @@ export function validatePersonCanJoinShiftOnDate(
     return { ok: true };
   }
 
-  const otherShiftId = getPersonOtherShiftOnDate(rules, { personId, shiftId, dateISO }, holidays);
+  const otherShiftId = getPersonOtherShiftOnDate(
+    rules,
+    { personId, shiftId, dateISO, scaleType },
+    holidays
+  );
   if (!otherShiftId) return { ok: true };
+
+  const candidateType = normalizeScaleType(scaleType);
+  const occurrences = getOccurrences(rules, dateISO, dateISO, holidays);
+  const conflictingOcc = occurrences.find(
+    (occ) =>
+      occ.personId === personId &&
+      occ.shift === otherShiftId &&
+      !canCombineScaleTypesOnSameDay(candidateType, occ.scaleType)
+  );
+
+  if (
+    candidateType === SCALE_TYPES.REGULAR &&
+    normalizeScaleType(conflictingOcc?.scaleType) === SCALE_TYPES.PLANTAO
+  ) {
+    return {
+      ok: false,
+      error: `Escala regular e plantão no mesmo dia (já escalado(a) no turno ${shiftLabel(
+        shiftsById,
+        otherShiftId
+      )}).`,
+      conflictShiftId: otherShiftId,
+    };
+  }
 
   return {
     ok: false,
@@ -101,25 +144,71 @@ function buildRulesWithCandidate(rules, candidateRule, excludeRuleId) {
   return [...rules, { ...normalized, id: candidateRule.id || "__candidate__" }];
 }
 
-/** No máximo uma escala regular por pessoa, turno e dia (regular + hora extra é permitido). */
-function validateNoDuplicateRegularPerShiftOnDay(occurrences, shiftsById = {}) {
-  const seen = new Map();
+function buildScaleTypeConflictError(occA, occB, shiftsById = {}) {
+  const typeA = normalizeScaleType(occA.scaleType);
+  const typeB = normalizeScaleType(occB.scaleType);
+  const dateLabel = formatDateLabel(occA.date);
+  const sameShift = occA.shift === occB.shift;
 
-  for (const occ of occurrences) {
-    if (!isRegularOccurrence(occ)) continue;
-
-    const key = `${occ.date}|${occ.personId}|${occ.shift}`;
-    if (seen.has(key)) {
-      return {
-        ok: false,
-        error: `Conflito em ${formatDateLabel(occ.date)}: mais de uma escala regular no turno ${shiftLabel(
-          shiftsById,
-          occ.shift
-        )}. Só é permitido uma escala regular por turno; plantão e hora extra podem coexistir.`,
-      };
+  if (typeA === SCALE_TYPES.REGULAR && typeB === SCALE_TYPES.REGULAR) {
+    if (sameShift) {
+      return `Conflito em ${dateLabel}: mais de uma escala regular no turno ${shiftLabel(
+        shiftsById,
+        occA.shift
+      )}. Só é permitido uma escala regular por turno; hora extra pode coexistir.`;
     }
 
-    seen.set(key, true);
+    return `Conflito em ${dateLabel}: mesma pessoa no turno ${shiftLabel(
+      shiftsById,
+      occA.shift
+    )} e ${shiftLabel(shiftsById, occB.shift)}.`;
+  }
+
+  if (
+    (typeA === SCALE_TYPES.REGULAR && typeB === SCALE_TYPES.PLANTAO) ||
+    (typeA === SCALE_TYPES.PLANTAO && typeB === SCALE_TYPES.REGULAR)
+  ) {
+    if (sameShift) {
+      return `Conflito em ${dateLabel}: escala regular e plantão no turno ${shiftLabel(
+        shiftsById,
+        occA.shift
+      )}.`;
+    }
+
+    return `Conflito em ${dateLabel}: escala regular e plantão no mesmo dia (turnos ${shiftLabel(
+      shiftsById,
+      occA.shift
+    )} e ${shiftLabel(shiftsById, occB.shift)}).`;
+  }
+
+  return `Conflito em ${dateLabel}: combinação não permitida entre ${describeScaleType(
+    typeA
+  )} e ${describeScaleType(typeB)}.`;
+}
+
+function validateScaleTypeCombinationsOnDay(occurrences, shiftsById = {}) {
+  const byDatePerson = new Map();
+
+  for (const occ of occurrences) {
+    const key = `${occ.date}|${occ.personId}`;
+    if (!byDatePerson.has(key)) byDatePerson.set(key, []);
+    byDatePerson.get(key).push(occ);
+  }
+
+  for (const occs of byDatePerson.values()) {
+    for (let i = 0; i < occs.length; i++) {
+      for (let j = i + 1; j < occs.length; j++) {
+        const occA = occs[i];
+        const occB = occs[j];
+
+        if (canCombineScaleTypesOnSameDay(occA.scaleType, occB.scaleType)) continue;
+
+        return {
+          ok: false,
+          error: buildScaleTypeConflictError(occA, occB, shiftsById),
+        };
+      }
+    }
   }
 
   return { ok: true };
@@ -137,39 +226,5 @@ export function validateRuleSingleShiftPerDay(rules, candidateRule, holidays = [
   const { start, end } = getRuleValidationRange(candidateRule);
   const occurrences = getOccurrences(testRules, start, end, holidays);
 
-  if (normalizeScaleType(candidateRule.scaleType) === SCALE_TYPES.REGULAR) {
-    const duplicateRegular = validateNoDuplicateRegularPerShiftOnDay(occurrences, shiftsById);
-    if (!duplicateRegular.ok) return duplicateRegular;
-  } else {
-    return { ok: true };
-  }
-
-  const shiftsByDatePerson = new Map();
-
-  for (const occ of occurrences) {
-    if (!isRegularOccurrence(occ)) continue;
-
-    const key = `${occ.date}|${occ.personId}`;
-    if (!shiftsByDatePerson.has(key)) {
-      shiftsByDatePerson.set(key, new Set());
-    }
-
-    const shiftSet = shiftsByDatePerson.get(key);
-    if (shiftSet.has(occ.shift)) continue;
-
-    if (shiftSet.size > 0) {
-      const existingShiftId = [...shiftSet][0];
-      return {
-        ok: false,
-        error: `Conflito em ${formatDateLabel(occ.date)}: mesma pessoa no turno ${shiftLabel(
-          shiftsById,
-          existingShiftId
-        )} e ${shiftLabel(shiftsById, occ.shift)}.`,
-      };
-    }
-
-    shiftSet.add(occ.shift);
-  }
-
-  return { ok: true };
+  return validateScaleTypeCombinationsOnDay(occurrences, shiftsById);
 }
