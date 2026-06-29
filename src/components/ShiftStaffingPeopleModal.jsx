@@ -43,6 +43,7 @@ export default function ShiftStaffingPeopleModal({
   removeRule,
   substitutions = [],
   substitutePersonOnShiftDate,
+  removeSubstitution,
 }) {
   const { shiftsById } = useShifts();
   const { persist } = usePersist();
@@ -216,6 +217,18 @@ export default function ShiftStaffingPeopleModal({
     });
   }
 
+  function handleRevertSubstitution(substitution) {
+    if (!removeSubstitution) return;
+
+    const fromName = peopleById[substitution.fromPersonId]?.nome ?? "Pessoa original";
+
+    persist(
+      () => removeSubstitution(substitution.id),
+      `Substituição desfeita. ${fromName} voltou ao turno.`,
+      "Não foi possível desfazer a substituição."
+    );
+  }
+
   return (
     <>
       <Modal open={open} onClose={handleClose} title={`${shift.label} · ${dateLabel}`} width="max-w-md">
@@ -300,7 +313,11 @@ export default function ShiftStaffingPeopleModal({
                       {person.nome}
                     </span>
                     {substitution && (
-                      <SubstitutionBadge substitution={substitution} peopleById={peopleById} />
+                      <SubstitutionBadge
+                        substitution={substitution}
+                        peopleById={peopleById}
+                        onClick={removeSubstitution ? handleRevertSubstitution : undefined}
+                      />
                     )}
                     {showOtherShiftWarning && (
                       <span className="shrink-0 text-[11px] font-medium text-amber-500">

@@ -38,6 +38,7 @@ export default function MonthPage({
   removeRule,
   substitutions = [],
   substitutePersonOnShiftDate,
+  removeSubstitution,
 }) {
   const { shifts, shiftsById } = useShifts();
   const [monthOffset, setMonthOffset] = useState(0);
@@ -326,6 +327,7 @@ export default function MonthPage({
         removeRule={removeRule}
         substitutions={substitutions}
         substitutePersonOnShiftDate={substitutePersonOnShiftDate}
+        removeSubstitution={removeSubstitution}
       />
 
       {people.length > 0 && (

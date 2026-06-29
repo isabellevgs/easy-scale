@@ -77,6 +77,7 @@ export default function App() {
                   removeRule={data.removeRule}
                   substitutions={data.substitutions}
                   substitutePersonOnShiftDate={data.substitutePersonOnShiftDate}
+                  removeSubstitution={data.removeSubstitution}
                 />
               }
             />
@@ -95,6 +96,7 @@ export default function App() {
                   removeRule={data.removeRule}
                   substitutions={data.substitutions}
                   substitutePersonOnShiftDate={data.substitutePersonOnShiftDate}
+                  removeSubstitution={data.removeSubstitution}
                 />
               }
             />

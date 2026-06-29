@@ -45,6 +45,7 @@ export default function WeekPage({
   removeRule,
   substitutions = [],
   substitutePersonOnShiftDate,
+  removeSubstitution,
 }) {
   const { shifts, shiftsById } = useShifts();
   const { persist } = usePersist();
@@ -343,6 +344,7 @@ export default function WeekPage({
         removeRule={removeRule}
         substitutions={substitutions}
         substitutePersonOnShiftDate={substitutePersonOnShiftDate}
+        removeSubstitution={removeSubstitution}
       />
 
       {people.length > 0 && (

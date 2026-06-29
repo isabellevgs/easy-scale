@@ -77,17 +77,34 @@ export default function SubstitutionsHistoryCard({ substitutions, people, shifts
   );
 }
 
-export function SubstitutionBadge({ substitution, peopleById }) {
+export function SubstitutionBadge({ substitution, peopleById, onClick }) {
   if (!substitution) return null;
 
-  const title = describeSubstitution(substitution, peopleById);
+  const baseTitle = describeSubstitution(substitution, peopleById);
+  const title = onClick ? "Desfazer substituição" : baseTitle;
+  const className =
+    "ml-1 inline-flex shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-100 ring-1 ring-sky-200/40";
+  const style = { background: "rgba(14, 116, 144, 0.55)" };
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick(substitution);
+        }}
+        className={`${className} cursor-pointer transition hover:brightness-110 hover:ring-sky-100/60`}
+        style={style}
+        title={title}
+      >
+        Subst.
+      </button>
+    );
+  }
 
   return (
-    <span
-      className="ml-1 inline-flex shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-100 ring-1 ring-sky-200/40"
-      style={{ background: "rgba(14, 116, 144, 0.55)" }}
-      title={title}
-    >
+    <span className={className} style={style} title={title}>
       Subst.
     </span>
   );
