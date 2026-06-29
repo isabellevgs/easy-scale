@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { CalendarPlus, Trash2, Pencil, Users as UsersIcon, History, SlidersHorizontal, X, ChevronDown, CalendarClock } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { CalendarPlus, Trash2, Pencil, Users as UsersIcon, History, SlidersHorizontal, X, ChevronDown, CalendarClock, ArrowLeftRight } from "lucide-react";
 import {
   Button,
   Card,
@@ -19,7 +21,12 @@ import { sortShiftIds } from "../lib/shifts";
 import { validateRuleSingleShiftPerDay } from "../lib/scheduleValidation";
 import { usePersist } from "../hooks/usePersist";
 import { describeScaleType, scaleTypeBadge } from "../lib/rules";
+import { normalizeSubstitutions } from "../lib/substitutions";
 import PageContainer from "../components/PageContainer";
+
+function formatSubstitutionDate(dateISO) {
+  return format(parseISO(dateISO), "dd/MM/yyyy · EEE", { locale: ptBR });
+}
 
 const RECURRENCE_TYPES = [
   { id: "specific_date", label: "Dia específico" },
@@ -47,6 +54,19 @@ function matchesFilters(rule, filters) {
   return true;
 }
 
+function matchesSubstitutionFilters(substitution, filters) {
+  if (filters.personId) {
+    const matchesPerson =
+      substitution.fromPersonId === filters.personId ||
+      substitution.toPersonId === filters.personId;
+    if (!matchesPerson) return false;
+  }
+  if (filters.shiftIds.length > 0 && !filters.shiftIds.includes(substitution.shiftId)) {
+    return false;
+  }
+  return true;
+}
+
 function countActiveFilters(filters) {
   let count = 0;
   if (filters.status !== "all") count++;
@@ -56,12 +76,22 @@ function countActiveFilters(filters) {
   return count;
 }
 
-export default function SchedulesPage({ people, rules, addRule, updateRule, removeRule, holidays = [] }) {
+export default function SchedulesPage({
+  people,
+  rules,
+  addRule,
+  updateRule,
+  removeRule,
+  holidays = [],
+  substitutions = [],
+  removeSubstitution,
+}) {
   const { shifts, shiftsById } = useShifts();
   const { persist } = usePersist();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [confirmDeleteSubstitution, setConfirmDeleteSubstitution] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
 
   const peopleById = useMemo(
@@ -89,16 +119,30 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
     [expiredRules, filters]
   );
 
-  const showActiveSection = filters.status === "all" || filters.status === "active";
-  const showScheduledSection = filters.status === "all" || filters.status === "scheduled";
-  const showExpiredSection = filters.status === "all" || filters.status === "expired";
+  const allSubstitutions = useMemo(() => normalizeSubstitutions(substitutions), [substitutions]);
+
+  const filteredSubstitutions = useMemo(
+    () => allSubstitutions.filter((item) => matchesSubstitutionFilters(item, filters)),
+    [allSubstitutions, filters]
+  );
+
+  const showActiveSection =
+    (filters.status === "all" || filters.status === "active") && filters.status !== "substitutions";
+  const showScheduledSection =
+    (filters.status === "all" || filters.status === "scheduled") && filters.status !== "substitutions";
+  const showExpiredSection =
+    (filters.status === "all" || filters.status === "expired") && filters.status !== "substitutions";
+  const showSubstitutionsSection = filters.status === "all" || filters.status === "substitutions";
   const hasActiveFilters = countActiveFilters(filters) > 0;
   const activeFilterCount = countActiveFilters(filters);
 
-  const visibleCount =
+  const visibleRuleCount =
     (showActiveSection ? filteredActiveRules.length : 0) +
     (showScheduledSection ? filteredScheduledRules.length : 0) +
     (showExpiredSection ? filteredExpiredRules.length : 0);
+
+  const visibleCount =
+    visibleRuleCount + (showSubstitutionsSection ? filteredSubstitutions.length : 0);
 
   function clearFilters() {
     setFilters(DEFAULT_FILTERS);
@@ -147,6 +191,9 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
   }
 
   const noPeople = people.length === 0;
+  const hasRules = rules.length > 0;
+  const hasSubstitutions = allSubstitutions.length > 0;
+  const hasContent = hasRules || hasSubstitutions;
 
   return (
     <PageContainer size="narrow">
@@ -173,7 +220,7 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
             Você precisa ter pelo menos uma pessoa cadastrada para montar uma escala.
           </p>
         </Card>
-      ) : rules.length === 0 ? (
+      ) : !hasContent ? (
         <Card className="flex flex-col items-center px-6 py-16 text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-3">
             <CalendarPlus className="h-5 w-5 text-ink-faint" />
@@ -201,9 +248,9 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
 
           {visibleCount === 0 ? (
             <Card className="px-5 py-10 text-center">
-              <p className="text-[14px] font-medium text-ink">Nenhuma escala encontrada</p>
+              <p className="text-[14px] font-medium text-ink">Nenhum resultado encontrado</p>
               <p className="mt-1 text-[13px] text-ink-soft">
-                Ajuste os filtros ou limpe a seleção para ver todas as escalas.
+                Ajuste os filtros ou limpe a seleção para ver escalas e substituições.
               </p>
               {hasActiveFilters && (
                 <Button className="mt-4" variant="secondary" onClick={clearFilters}>
@@ -236,9 +283,14 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
 
               {showActiveSection && filteredActiveRules.length > 0 && (
                 <section>
-                  <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-faint">
-                    Escalas ativas
-                  </h2>
+                  <div className="mb-2 flex items-center gap-2">
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-faint">
+                      Escalas ativas
+                    </h2>
+                    <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                      {filteredActiveRules.length}
+                    </span>
+                  </div>
                   <Card className="divide-y divide-border-soft">
                     {filteredActiveRules.map((rule) => (
                       <RuleListItem
@@ -307,6 +359,41 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
                   </Card>
                 </section>
               )}
+              {showSubstitutionsSection && filteredSubstitutions.length > 0 && (
+                <section>
+                  <div className="mb-2 flex items-center gap-2">
+                    <ArrowLeftRight className="h-4 w-4 text-ink-faint" />
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-faint">
+                      Substituições
+                    </h2>
+                    <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                      {filteredSubstitutions.length}
+                    </span>
+                  </div>
+                  <Card className="divide-y divide-border-soft border-dashed">
+                    {filteredSubstitutions.map((item) => (
+                      <SubstitutionListItem
+                        key={item.id}
+                        substitution={item}
+                        people={people}
+                        peopleById={peopleById}
+                        onDelete={() => setConfirmDeleteSubstitution(item)}
+                      />
+                    ))}
+                  </Card>
+                </section>
+              )}
+
+              {showSubstitutionsSection &&
+                filteredSubstitutions.length === 0 &&
+                allSubstitutions.length > 0 &&
+                filters.status === "substitutions" && (
+                  <Card className="px-5 py-6 text-center">
+                    <p className="text-[13px] text-ink-soft">
+                      Nenhuma substituição corresponde aos filtros selecionados.
+                    </p>
+                  </Card>
+                )}
             </>
           )}
         </div>
@@ -342,6 +429,53 @@ export default function SchedulesPage({ people, rules, addRule, updateRule, remo
           </Button>
         </div>
       </Modal>
+
+      <Modal
+        open={!!confirmDeleteSubstitution}
+        onClose={() => setConfirmDeleteSubstitution(null)}
+        title="Desfazer substituição"
+      >
+        {confirmDeleteSubstitution && (
+          <>
+            <p className="text-[14px] text-ink-soft">
+              Desfazer a substituição de{" "}
+              <strong className="text-ink">
+                {peopleById[confirmDeleteSubstitution.fromPersonId]?.nome ?? "—"} →{" "}
+                {peopleById[confirmDeleteSubstitution.toPersonId]?.nome ?? "—"}
+              </strong>{" "}
+              em {formatSubstitutionDate(confirmDeleteSubstitution.dateISO)}?
+            </p>
+            <p className="mt-2 text-[13px] text-ink-faint">
+              {peopleById[confirmDeleteSubstitution.toPersonId]?.nome ?? "A substituta"} será
+              removida deste turno e{" "}
+              {peopleById[confirmDeleteSubstitution.fromPersonId]?.nome ?? "a pessoa original"}{" "}
+              voltará a escala neste dia.
+            </p>
+          </>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmDeleteSubstitution(null)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            disabled={!removeSubstitution}
+            onClick={() => {
+              const originalName =
+                peopleById[confirmDeleteSubstitution.fromPersonId]?.nome ?? "Pessoa original";
+              persist(
+                () => removeSubstitution(confirmDeleteSubstitution.id),
+                `${originalName} voltou ao turno.`,
+                "Não foi possível desfazer a substituição."
+              ).then((result) => {
+                if (result?.ok) setConfirmDeleteSubstitution(null);
+              });
+            }}
+          >
+            Desfazer
+          </Button>
+        </div>
+      </Modal>
     </PageContainer>
   );
 }
@@ -351,6 +485,7 @@ const STATUS_OPTIONS = [
   { id: "active", label: "Ativas" },
   { id: "scheduled", label: "Agendadas" },
   { id: "expired", label: "Passadas" },
+  { id: "substitutions", label: "Substituições" },
 ];
 
 function ScheduleFilters({
@@ -502,6 +637,57 @@ function ScheduleFilters({
         </div>
       )}
     </Card>
+  );
+}
+
+function SubstitutionListItem({ substitution, people, peopleById, onDelete }) {
+  const fromPerson = peopleById[substitution.fromPersonId];
+  const toPerson = peopleById[substitution.toPersonId];
+  if (!fromPerson || !toPerson) return null;
+
+  const badge = scaleTypeBadge(substitution.scaleType);
+
+  return (
+    <div className="flex items-start gap-3 px-5 py-3.5">
+      <div className="flex -space-x-2 pt-0.5">
+        <PersonAvatar
+          nome={fromPerson.nome}
+          color={colorForPerson(fromPerson.id, people)}
+          size={28}
+        />
+        <PersonAvatar
+          nome={toPerson.nome}
+          color={colorForPerson(toPerson.id, people)}
+          size={28}
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[14px] font-medium text-ink">
+            {fromPerson.nome} → {toPerson.nome}
+          </p>
+          {badge && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+          )}
+        </div>
+        <p className="text-[12px] text-ink-faint">
+          {formatSubstitutionDate(substitution.dateISO)} · {describeScaleType(substitution.scaleType)}
+        </p>
+        {substitution.note ? (
+          <p className="mt-1 text-[12px] text-ink-soft">{substitution.note}</p>
+        ) : null}
+        <div className="mt-1.5">
+          <ShiftBadge shiftId={substitution.shiftId} size="sm" />
+        </div>
+      </div>
+      <IconButton variant="danger" onClick={onDelete} aria-label="Desfazer substituição" title="Desfazer substituição">
+        <Trash2 className="h-4 w-4" />
+      </IconButton>
+    </div>
   );
 }
 

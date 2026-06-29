@@ -54,6 +54,8 @@ export default function App() {
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
+                  substitutions={data.substitutions}
+                  removeSubstitution={data.removeSubstitution}
                 />
               }
             />
@@ -73,6 +75,8 @@ export default function App() {
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
+                  substitutions={data.substitutions}
+                  substitutePersonOnShiftDate={data.substitutePersonOnShiftDate}
                 />
               }
             />
@@ -89,6 +93,8 @@ export default function App() {
                   addRule={data.addRule}
                   updateRule={data.updateRule}
                   removeRule={data.removeRule}
+                  substitutions={data.substitutions}
+                  substitutePersonOnShiftDate={data.substitutePersonOnShiftDate}
                 />
               }
             />
@@ -124,6 +130,7 @@ export default function App() {
                   removeHoliday={data.removeHoliday}
                   exportBackup={data.exportBackup}
                   importBackup={data.importBackup}
+                  substitutions={data.substitutions}
                 />
               }
             />

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card } from "./ui";
@@ -18,6 +19,7 @@ import {
 } from "../lib/shiftNeeds";
 import { SCHEDULE_VIEW } from "../hooks/useScheduleViewMode";
 import PersonScaleOverlapIcon from "./PersonScaleOverlapIcon";
+import { SubstitutionBadge, buildSubstitutionsByCell } from "./SubstitutionsHistoryCard";
 
 function cellStatusForRow(row) {
   return row.required > 0 ? row.status : STAFFING_STATUS.NONE;
@@ -161,18 +163,23 @@ function chipTextColor(hex) {
   return luminance > 0.62 ? "#0c0d10" : "#ffffff";
 }
 
-function PeopleList({ scheduled, people, shiftOccs }) {
+function PeopleList({ scheduled, people, shiftOccs, shiftId, dateISO, substitutionsByCell, peopleById }) {
   return (
     <div className="flex w-full flex-col gap-1 px-2 py-2.5">
       {scheduled.map((person) => {
         const color = colorForPerson(person.id, people);
         const overlapLabel = describePersonScaleOverlap(shiftOccs, person.id);
+        const substitution = substitutionsByCell.get(`${dateISO}|${shiftId}|${person.id}`);
         return (
           <span
             key={person.id}
             className="block w-full break-words rounded-md px-2 py-1 text-left text-[12px] font-semibold leading-snug"
             style={{ backgroundColor: color, color: chipTextColor(color) }}
-            title={person.nome}
+            title={
+              substitution
+                ? `${person.nome} · ${substitution.note || `Substitui ${peopleById[substitution.fromPersonId]?.nome ?? "—"}`}`
+                : person.nome
+            }
           >
             <span className="inline-flex items-center gap-1">
               {overlapLabel && (
@@ -182,6 +189,9 @@ function PeopleList({ scheduled, people, shiftOccs }) {
                 />
               )}
               {person.nome}
+              {substitution && (
+                <SubstitutionBadge substitution={substitution} peopleById={peopleById} />
+              )}
             </span>
           </span>
         );
@@ -190,7 +200,16 @@ function PeopleList({ scheduled, people, shiftOccs }) {
   );
 }
 
-function PeopleCell({ dayOccurrences, shift, people, onClick, personFilterIds }) {
+function PeopleCell({
+  dayOccurrences,
+  shift,
+  people,
+  onClick,
+  personFilterIds,
+  dateISO,
+  substitutionsByCell,
+  peopleById,
+}) {
   const shiftOccs = dayOccurrences.filter((o) => o.shift === shift.id);
   const scheduled = filterPeopleByIds(peopleScheduledIn(shiftOccs, people), personFilterIds);
   const isEmpty = scheduled.length === 0;
@@ -208,7 +227,15 @@ function PeopleCell({ dayOccurrences, shift, people, onClick, personFilterIds })
       </button>
       {!isEmpty && (
         <div className="relative z-10 pointer-events-none">
-          <PeopleList scheduled={scheduled} people={people} shiftOccs={shiftOccs} />
+          <PeopleList
+            scheduled={scheduled}
+            people={people}
+            shiftOccs={shiftOccs}
+            shiftId={shift.id}
+            dateISO={dateISO}
+            substitutionsByCell={substitutionsByCell}
+            peopleById={peopleById}
+          />
         </div>
       )}
     </div>
@@ -318,10 +345,19 @@ export default function WeekScheduleTable({
   personFilterIds = [],
   todayISO,
   onOpenStaffing,
+  substitutions = [],
 }) {
   const staffingOccByDate = fullOccByDate ?? occByDate;
   const displayDays = days;
   const isNeedsView = viewMode === SCHEDULE_VIEW.NEEDS;
+  const substitutionsByCell = useMemo(
+    () => buildSubstitutionsByCell(substitutions),
+    [substitutions]
+  );
+  const peopleById = useMemo(
+    () => Object.fromEntries(people.map((person) => [person.id, person])),
+    [people]
+  );
 
   const tableWrapClass = isNeedsView
     ? "week-schedule-table-wrap export-table-wrap hidden sm:block"
@@ -448,6 +484,9 @@ export default function WeekScheduleTable({
                           dayOccurrences={cell.dayOccurrences}
                           people={people}
                           personFilterIds={personFilterIds}
+                          dateISO={cell.iso}
+                          substitutionsByCell={substitutionsByCell}
+                          peopleById={peopleById}
                           onClick={() => onOpenStaffing(cell.day, cell.row)}
                         />
                       ) : (

@@ -43,6 +43,8 @@ export default function WeekPage({
   addRule,
   updateRule,
   removeRule,
+  substitutions = [],
+  substitutePersonOnShiftDate,
 }) {
   const { shifts, shiftsById } = useShifts();
   const { persist } = usePersist();
@@ -304,6 +306,7 @@ export default function WeekPage({
               personFilterIds={personFilterIds}
               todayISO={todayISO}
               onOpenStaffing={openStaffingModal}
+              substitutions={substitutions}
             />
           )}
         </ExportFrame>
@@ -338,6 +341,8 @@ export default function WeekPage({
         addRule={addRule}
         updateRule={updateRule}
         removeRule={removeRule}
+        substitutions={substitutions}
+        substitutePersonOnShiftDate={substitutePersonOnShiftDate}
       />
 
       {people.length > 0 && (

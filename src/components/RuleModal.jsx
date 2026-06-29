@@ -94,6 +94,20 @@ export default function RuleModal({ open, people, initial, onClose, onSave, titl
     });
   }
 
+  function handleIntervalEndChange(intervalEnd) {
+    setForm((f) => {
+      const person = people.find((p) => p.id === f.personId);
+      if (!person || !isValidTime(intervalEnd)) {
+        return { ...f, intervalEnd };
+      }
+      const intervalStart = addMinutesToTime(
+        intervalEnd,
+        -normalizePersonIntervalMinutes(person.intervalMinutes)
+      );
+      return { ...f, intervalStart, intervalEnd };
+    });
+  }
+
   function toggleWeekday(w) {
     setForm((f) => {
       const current = f.recurrence.weekdays || [];
@@ -285,7 +299,7 @@ export default function RuleModal({ open, people, initial, onClose, onSave, titl
                         type="time"
                         className={inputClass}
                         value={form.intervalEnd || ""}
-                        onChange={(e) => setForm((f) => ({ ...f, intervalEnd: e.target.value }))}
+                        onChange={(e) => handleIntervalEndChange(e.target.value)}
                         required
                       />
                     </label>

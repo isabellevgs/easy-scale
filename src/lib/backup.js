@@ -51,6 +51,9 @@ export function createBackupPayload(state) {
       "consistencyRules",
       "timeCoverageRules",
       "showTimeCoverageViolations",
+      "substitutions",
+      "substitutions.intervalStart",
+      "substitutions.intervalEnd",
     ],
     data,
   };
@@ -124,5 +127,6 @@ export function describeBackupContents(state) {
     consistencyRulesWithPeople: countConsistencyRulesWithPeople(data.consistencyRules),
     consistencyRuleLinks: countConsistencyRuleLinks(data.consistencyRules),
     timeCoverageRules: countTimeCoverageRules(data.timeCoverageRules),
+    substitutions: Array.isArray(data.substitutions) ? data.substitutions.length : 0,
   };
 }

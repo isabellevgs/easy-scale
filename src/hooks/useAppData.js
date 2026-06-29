@@ -13,6 +13,7 @@ import {
   normalizeShifts,
   isDefaultShifts,
   getShiftIds,
+  buildShiftsById,
 } from "../lib/shifts";
 import {
   normalizeShiftNeedsForShifts,
@@ -26,6 +27,13 @@ import {
   removePersonFromConsistencyRules,
 } from "../lib/consistencyRules";
 import { normalizeTimeCoverageRules } from "../lib/timeCoverageRules";
+import {
+  normalizeSubstitutions,
+  pruneSubstitutionsForPeople,
+  pruneSubstitutionsForShifts,
+  substitutePersonOnShiftDate as runSubstitution,
+  revertSubstitution as runRevertSubstitution,
+} from "../lib/substitutions";
 
 function normalizeShiftItem(raw) {
   const [item] = normalizeShifts([raw]);
@@ -35,6 +43,11 @@ function normalizeShiftItem(raw) {
 export function useAppData() {
   const [state, setState] = useState(loadState);
   const saveListenersRef = useRef([]);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const waitForSave = useCallback(() => {
     return new Promise((resolve) => {
@@ -105,6 +118,10 @@ export function useAppData() {
         people: s.people.filter((p) => p.id !== id),
         rules: s.rules.filter((r) => r.personId !== id),
         consistencyRules: removePersonFromConsistencyRules(s.consistencyRules, id),
+        substitutions: pruneSubstitutionsForPeople(
+          s.substitutions,
+          s.people.filter((p) => p.id !== id).map((p) => p.id)
+        ),
       }));
     },
     [runAndSave]
@@ -189,6 +206,7 @@ export function useAppData() {
             shiftIds
           ),
           consistencyRules: pruneConsistencyRulesForShifts(s.consistencyRules, shiftIds),
+          substitutions: pruneSubstitutionsForShifts(s.substitutions, shiftIds),
         };
       });
     },
@@ -272,6 +290,65 @@ export function useAppData() {
     [runAndSave]
   );
 
+  const addSubstitution = useCallback(
+    (record) => {
+      const normalized = normalizeSubstitutions([record])[0];
+      if (!normalized) {
+        return Promise.resolve({ ok: false, error: "Registro de substituição inválido." });
+      }
+      return runAndSave((s) => ({
+        ...s,
+        substitutions: normalizeSubstitutions([...(s.substitutions || []), normalized]),
+      })).then((result) => ({ ...result, substitution: normalized }));
+    },
+    [runAndSave]
+  );
+
+  const removeSubstitution = useCallback(
+    (id) => {
+      const snapshot = stateRef.current;
+      return runRevertSubstitution(
+        {
+          rules: snapshot.rules,
+          substitutions: snapshot.substitutions,
+          addRule,
+          updateRule,
+          removeRule,
+          holidays: snapshot.holidays,
+          shiftsById: buildShiftsById(snapshot.shifts),
+          removeSubstitutionRecord: (subId) =>
+            runAndSave((s) => ({
+              ...s,
+              substitutions: normalizeSubstitutions(
+                (s.substitutions || []).filter((item) => item.id !== subId)
+              ),
+            })),
+        },
+        id
+      );
+    },
+    [addRule, updateRule, removeRule, runAndSave]
+  );
+
+  const substitutePersonOnShiftDate = useCallback(
+    (params) => {
+      const snapshot = stateRef.current;
+      return runSubstitution(
+        {
+          rules: params.rules ?? snapshot.rules,
+          addRule,
+          updateRule,
+          removeRule,
+          addSubstitution,
+          holidays: snapshot.holidays,
+          shiftsById: buildShiftsById(snapshot.shifts),
+        },
+        params
+      );
+    },
+    [addRule, updateRule, removeRule, addSubstitution]
+  );
+
   const exportBackup = useCallback(() => {
     try {
       return downloadBackup(state);
@@ -317,6 +394,7 @@ export function useAppData() {
     consistencyRules: state.consistencyRules,
     timeCoverageRules: state.timeCoverageRules,
     showTimeCoverageViolations: state.showTimeCoverageViolations,
+    substitutions: state.substitutions,
     addPerson,
     updatePerson,
     removePerson,
@@ -336,5 +414,7 @@ export function useAppData() {
     importBackup,
     updateConsistencyRules,
     updateTimeCoverageRules,
+    substitutePersonOnShiftDate,
+    removeSubstitution,
   };
 }

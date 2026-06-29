@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Repeat, Pencil } from "lucide-react";
+import { Check, Repeat, Pencil, ArrowLeftRight } from "lucide-react";
 import { Modal, PersonAvatar, IconButton, Button } from "./ui";
 import ShiftRecurrenceModal from "./ShiftRecurrenceModal";
+import ShiftSubstitutionModal from "./ShiftSubstitutionModal";
 import RuleModal from "./RuleModal";
+import { SubstitutionBadge } from "./SubstitutionsHistoryCard";
 import { colorForPerson, peopleScheduledIn, sortPeopleByName } from "../lib/constants";
 import {
   getStaffingStatus,
@@ -24,6 +26,7 @@ import { findConflictingShiftForPerson, validateRuleSingleShiftPerDay } from "..
 import { SCALE_TYPES } from "../lib/rules";
 import { usePersist } from "../hooks/usePersist";
 import { useShifts } from "../hooks/useShifts";
+import { getSubstitutionForPersonOnShift } from "../lib/substitutions";
 
 export default function ShiftStaffingPeopleModal({
   open,
@@ -38,12 +41,20 @@ export default function ShiftStaffingPeopleModal({
   addRule,
   updateRule,
   removeRule,
+  substitutions = [],
+  substitutePersonOnShiftDate,
 }) {
   const { shiftsById } = useShifts();
   const { persist } = usePersist();
   const [recurrencePerson, setRecurrencePerson] = useState(null);
   const [adjustPerson, setAdjustPerson] = useState(null);
   const [removeConfirmPerson, setRemoveConfirmPerson] = useState(null);
+  const [substitutePerson, setSubstitutePerson] = useState(null);
+
+  const peopleById = useMemo(
+    () => Object.fromEntries(allPeople.map((person) => [person.id, person])),
+    [allPeople]
+  );
 
   const dayOccurrences = useMemo(() => {
     if (!open || !dateISO) return [];
@@ -180,7 +191,29 @@ export default function ShiftStaffingPeopleModal({
     setRecurrencePerson(null);
     setAdjustPerson(null);
     setRemoveConfirmPerson(null);
+    setSubstitutePerson(null);
     onClose();
+  }
+
+  function handleSubstituteConfirm(payload) {
+    if (!substitutePersonOnShiftDate) return;
+
+    persist(
+      () =>
+        substitutePersonOnShiftDate({
+          fromPersonId: payload.fromPersonId,
+          toPersonId: payload.toPersonId,
+          shiftId: payload.shiftId,
+          dateISO: payload.dateISO,
+          note: payload.note,
+          rules: payload.rules,
+          outgoingContext: payload.outgoingContext,
+        }),
+      `${substitutePerson.nome} substituído(a) por ${payload.toPersonName}.`,
+      "Não foi possível concluir a substituição."
+    ).then((result) => {
+      if (result?.ok) setSubstitutePerson(null);
+    });
   }
 
   return (
@@ -226,6 +259,15 @@ export default function ShiftStaffingPeopleModal({
                   holidays
                 );
 
+              const substitution =
+                selected && dateISO && shift
+                  ? getSubstitutionForPersonOnShift(substitutions, {
+                      dateISO,
+                      shiftId: shift.id,
+                      toPersonId: person.id,
+                    })
+                  : null;
+
               return (
                 <div
                   key={person.id}
@@ -257,6 +299,9 @@ export default function ShiftStaffingPeopleModal({
                     >
                       {person.nome}
                     </span>
+                    {substitution && (
+                      <SubstitutionBadge substitution={substitution} peopleById={peopleById} />
+                    )}
                     {showOtherShiftWarning && (
                       <span className="shrink-0 text-[11px] font-medium text-amber-500">
                         Em {otherShiftLabel}
@@ -272,6 +317,15 @@ export default function ShiftStaffingPeopleModal({
 
                   {selected && (
                     <div className="my-auto flex shrink-0 items-center pr-1">
+                      {substitutePersonOnShiftDate && (
+                        <IconButton
+                          onClick={() => setSubstitutePerson(person)}
+                          aria-label="Substituir pessoa"
+                          title="Substituir pessoa"
+                        >
+                          <ArrowLeftRight className="h-4 w-4 text-ink-faint" />
+                        </IconButton>
+                      )}
                       <IconButton
                         onClick={() => setAdjustPerson(person)}
                         aria-label="Ajustar escala atual"
@@ -356,6 +410,19 @@ export default function ShiftStaffingPeopleModal({
         zIndex={60}
         onClose={() => setAdjustPerson(null)}
         onSave={handleAdjustSave}
+      />
+
+      <ShiftSubstitutionModal
+        open={!!substitutePerson}
+        onClose={() => setSubstitutePerson(null)}
+        fromPerson={substitutePerson}
+        shift={shift}
+        dateLabel={dateLabel}
+        dateISO={dateISO}
+        rules={rules}
+        allPeople={allPeople}
+        holidays={holidays}
+        onConfirm={handleSubstituteConfirm}
       />
 
       <ShiftRecurrenceModal

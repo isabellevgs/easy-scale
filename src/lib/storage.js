@@ -11,6 +11,7 @@ import { resolveConsistencyRules } from "./consistencyRules";
 import { normalizeTimeCoverageRules } from "./timeCoverageRules";
 import { getShiftIds } from "./shifts";
 import { normalizeScheduleRules } from "./rules";
+import { normalizeSubstitutions } from "./substitutions";
 
 const STORAGE_KEY = "easyscale:v1";
 
@@ -23,6 +24,7 @@ export const DEFAULT_STATE = {
   consistencyRules: [],
   timeCoverageRules: [],
   showTimeCoverageViolations: true,
+  substitutions: [],
 };
 
 function normalizePerson(raw) {
@@ -70,6 +72,7 @@ export function normalizeState(parsed) {
     consistencyRules: resolveConsistencyRules(parsed, shiftIds),
     timeCoverageRules: normalizeTimeCoverageRules(parsed.timeCoverageRules),
     showTimeCoverageViolations: parsed.showTimeCoverageViolations !== false,
+    substitutions: normalizeSubstitutions(parsed.substitutions),
   };
 }
 

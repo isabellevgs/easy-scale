@@ -3,7 +3,7 @@ import { getOccurrences } from "./schedule";
 import { validateRuleSingleShiftPerDay } from "./scheduleValidation";
 import { normalizeScaleType } from "./rules";
 import { CUSTOM_END_TYPES } from "./customRecurrence";
-import { normalizeRuleIntervalFields } from "./ruleInterval";
+import { normalizeRuleIntervalFields, isValidTime } from "./ruleInterval";
 
 export const UNSCHEDULE_SCOPE = {
   DAY: "day",
@@ -173,18 +173,28 @@ export function schedulePersonOnShiftDate({
   dateISO,
   holidays,
   shiftsById,
+  scaleType: scaleTypeParam,
+  intervalStart: intervalStartParam,
+  intervalEnd: intervalEndParam,
 }) {
   if (isPersonScheduledOnShiftDate(rules, { personId, shiftId, dateISO }, holidays)) {
     return Promise.resolve({ ok: true });
   }
 
+  const scaleType = normalizeScaleType(scaleTypeParam);
+  const intervalFields = normalizeRuleIntervalFields(
+    { intervalStart: intervalStartParam, intervalEnd: intervalEndParam },
+    scaleType
+  );
+
   const candidateRule = {
     personId,
     shifts: [shiftId],
-    scaleType: normalizeScaleType(),
+    scaleType,
     recurrence: { type: "specific_date", date: dateISO },
     startDate: "",
     endDate: "",
+    ...intervalFields,
   };
 
   const validation = validateRuleSingleShiftPerDay(rules, candidateRule, holidays, { shiftsById });
@@ -193,10 +203,11 @@ export function schedulePersonOnShiftDate({
   return addRule({
     personId,
     shifts: [shiftId],
-    scaleType: normalizeScaleType(),
+    scaleType,
     recurrence: { type: "specific_date", date: dateISO },
     startDate: "",
     endDate: "",
+    ...intervalFields,
   });
 }
 
@@ -259,6 +270,13 @@ export async function unschedulePersonOnShiftDate({
 
 export function getPersonShiftRuleOnDate(rules, { personId, shiftId, dateISO }, holidays = []) {
   const covering = getRulesCoveringShiftDate(rules, { personId, shiftId, dateISO }, holidays);
+  if (!covering.length) return null;
+
+  const withInterval = covering.find(
+    (rule) => isValidTime(rule.intervalStart) && isValidTime(rule.intervalEnd)
+  );
+  if (withInterval) return withInterval;
+
   return (
     covering.find((rule) => rule.recurrence.type === "custom") ||
     covering.find((rule) => rule.recurrence.type === "weekly") ||

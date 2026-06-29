@@ -28,6 +28,7 @@ import {
 import { WEEKDAY_LABELS_FULL } from "../lib/constants";
 import { describeBackupContents, readBackupFile } from "../lib/backup";
 import BackupContentsSummary from "../components/BackupContentsSummary";
+import SubstitutionsHistoryCard from "../components/SubstitutionsHistoryCard";
 import { toISODate } from "../lib/schedule";
 import PageContainer from "../components/PageContainer";
 
@@ -50,6 +51,7 @@ export default function SettingsPage({
   removeHoliday,
   exportBackup,
   importBackup,
+  substitutions = [],
 }) {
   const { shifts, shiftsById } = useShifts();
   const { notifySave, persist } = usePersist();
@@ -72,6 +74,7 @@ export default function SettingsPage({
     holidays,
     consistencyRules,
     timeCoverageRules,
+    substitutions,
   });
 
   function handleNeedChange(dayIndex, shiftId, value) {
@@ -257,7 +260,7 @@ export default function SettingsPage({
             <h2 className="text-[15px] font-semibold text-ink">Backup dos dados</h2>
             <p className="mt-0.5 text-[13px] text-ink-soft">
               Exporte ou importe um arquivo JSON com equipe, escalas, turnos, feriados, necessidade
-              por turno, regras de consistência e regras de horário.
+              por turno, regras de consistência, regras de horário e histórico de substituições.
             </p>
           </div>
         </div>
@@ -304,6 +307,15 @@ export default function SettingsPage({
                 </span>
               </>
             )}
+            {summary.substitutions > 0 && (
+              <>
+                ,{" "}
+                <span className="font-medium text-ink">
+                  {summary.substitutions} substituiç
+                  {summary.substitutions !== 1 ? "ões" : "ão"}
+                </span>
+              </>
+            )}
             .
           </p>
         </div>
@@ -334,6 +346,14 @@ export default function SettingsPage({
           transferir para outro dispositivo ou recuperar depois.
         </p>
       </Card>
+
+      <div className="mb-5">
+        <SubstitutionsHistoryCard
+          substitutions={substitutions}
+          people={people}
+          shiftsById={shiftsById}
+        />
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-ink">Turnos</h2>

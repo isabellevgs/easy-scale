@@ -51,6 +51,14 @@ export default function BackupContentsSummary({ summary }) {
           </span>
         </>
       )}
+      {summary.substitutions > 0 && (
+        <>
+          ,{" "}
+          <span className="font-medium text-ink">
+            {summary.substitutions} substituiç{summary.substitutions !== 1 ? "ões" : "ão"}
+          </span>
+        </>
+      )}
       {summary.includesShiftNeeds && (
         <>
           {" "}
